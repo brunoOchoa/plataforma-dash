@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, LogIn, Loader2, AlertCircle, Zap, ShieldCheck, Bot, Users } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Loader2, AlertCircle, Zap, ShieldCheck, Bot, Users, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { authService } from '../services/api';
 import type { UserInfo } from '../types/auth';
 
@@ -32,6 +33,7 @@ const PlatLogo = () => (
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const [loginType, setLoginType]       = useState<LoginType>('system');
   const [username, setUsername]         = useState('');
@@ -101,15 +103,22 @@ export default function Login() {
 
           {/* Hero */}
           <div className="login-hero">
-            <div className="login-badge">
-              <Zap size={10} />
-              Plataforma v3
+
+            {/* Identidade principal */}
+            <div className="login-brand-hero">
+              <div className="login-v3-pill">
+                <Zap size={10} />
+                v3
+              </div>
+              <h1 className="login-headline">Plataforma</h1>
             </div>
 
-            <h1 className="login-headline">
-              Gerencie tudo<br />em um só lugar.
-            </h1>
+            {/* Tagline — menor */}
+            <p className="login-tagline">
+              Gerencie tudo em um só lugar.
+            </p>
 
+            {/* Descrição — sutil */}
             <p className="login-subline">
               Acesse usuários, permissões, bots e base de conhecimento através de um painel centralizado e seguro.
             </p>
@@ -118,9 +127,9 @@ export default function Login() {
               {FEATURES.map(({ icon: Icon, text }) => (
                 <div key={text} className="login-feature-item">
                   <div className="login-feature-icon">
-                    <Icon size={15} color="#60a5fa" />
+                    <Icon size={14} color="#60a5fa" />
                   </div>
-                  <span style={{ fontSize: 14, color: '#64748b' }}>{text}</span>
+                  <span className="login-feature-text">{text}</span>
                 </div>
               ))}
             </div>
@@ -138,6 +147,10 @@ export default function Login() {
       ══════════════════════ */}
       <div className="login-right">
         <div className="login-right-glow" />
+
+        <button className="login-theme-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}>
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
 
         <div className="login-form-box">
 

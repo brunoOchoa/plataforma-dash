@@ -8,6 +8,7 @@ import {
 import { companyService } from '../services/companyService';
 import type { Company, CreateCompanyRequest, UpdateCompanyRequest, Page } from '../types/company';
 import AppShell from '../components/AppShell';
+import { useModalAnimation } from '../hooks/useModalAnimation';
 
 /* ══════════════════════════════════════
    TOAST
@@ -71,15 +72,16 @@ function PasswordModal({ company, onClose }: { company: Company; onClose: () => 
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3>Empresa criada com sucesso!</h3>
             <p>Guarde a senha do administrador antes de fechar</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
         <div className="modal-body">
           {/* company card */}
@@ -196,15 +198,16 @@ function CompanyModal({ company, onClose, onSave }: CompanyModalProps) {
     }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3>{isEdit ? 'Editar Empresa' : 'Nova Empresa'}</h3>
             <p>{isEdit ? `Editando ${company!.name}` : 'Preencha os dados da nova empresa'}</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         <div className="modal-body">
@@ -294,7 +297,7 @@ function CompanyModal({ company, onClose, onSave }: CompanyModalProps) {
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close} disabled={saving}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
             {saving ? <><span className="spinner-sm" /> Salvando…</> : <><Check size={14} />{isEdit ? 'Salvar' : 'Criar Empresa'}</>}
           </button>
@@ -321,9 +324,10 @@ function DeleteModal({ company, onClose, onConfirm }: {
     } finally { setLoading(false); }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal confirm-modal" onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal confirm-modal${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="modal-body" style={{ textAlign: 'center', padding: '32px 28px 20px' }}>
           <div className="confirm-icon"><Trash2 size={22} color="#f87171" /></div>
           <h4>Desativar Empresa?</h4>
@@ -339,7 +343,7 @@ function DeleteModal({ company, onClose, onConfirm }: {
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close} disabled={loading}>Cancelar</button>
           <button className="btn btn-danger" onClick={handle} disabled={loading}>
             {loading ? <><span className="spinner-sm" /> Desativando…</> : <><Trash2 size={14} /> Desativar</>}
           </button>

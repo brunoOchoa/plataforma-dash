@@ -239,7 +239,7 @@ body {
 /* ── topbar ── */
 .topbar {
   flex-shrink: 0;
-  height: 64px;
+  height: 56px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -249,6 +249,7 @@ body {
   backdrop-filter: blur(12px);
   position: relative;
   z-index: 20;
+  /* NÃO overflow:hidden — cortaria o dropdown da empresa */
 }
 
 /* ── topbar text colors ── */
@@ -290,6 +291,7 @@ body {
 }
 
 /* ── company selector (topbar) ── */
+/* ── Company selector (custom dropdown) ── */
 .company-selector-wrap {
   display: flex;
   align-items: center;
@@ -297,32 +299,76 @@ body {
   background: var(--bg-input);
   border: 1px solid var(--border-input);
   border-radius: 10px;
-  padding: 0 10px 0 10px;
+  padding: 0 10px;
   height: 36px;
   transition: border-color 0.15s;
 }
-.company-selector-wrap:focus-within {
-  border-color: #3b82f6;
+.company-selector-wrap.cs-custom {
+  cursor: pointer;
+  position: relative;
+  user-select: none;
 }
-.company-selector {
-  background: transparent;
-  border: none;
-  outline: none;
+.company-selector-wrap.cs-custom:hover { border-color: var(--border-hover, rgba(255,255,255,0.18)); }
+
+.cs-label {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
-  font-family: inherit;
-  cursor: pointer;
-  min-width: 160px;
-  max-width: 220px;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%23475569' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 4px center;
-  padding-right: 20px;
+  min-width: 100px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
-.company-selector option { background: var(--select-option-bg); color: var(--text-primary); }
-.company-selector:disabled { opacity: 0.5; cursor: not-allowed; }
+.cs-chevron {
+  color: #475569;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.cs-chevron.open { transform: rotate(180deg); }
+
+/* Dropdown panel */
+.cs-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  padding: 4px;
+  min-width: 220px;
+  max-width: 300px;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+  animation: cs-dropdown-in 0.15s ease forwards;
+}
+@keyframes cs-dropdown-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cs-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.1s;
+  gap: 8px;
+}
+.cs-option span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-option:hover { background: var(--bg-hover); }
+.cs-option.active { color: #60a5fa; font-weight: 600; }
+.cs-option.active svg { flex-shrink: 0; }
+
+.cs-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+.cs-empty { padding: 10px 12px; font-size: 12px; color: var(--text-faint); }
 
 /* ── page content ── */
 .page-content {
@@ -672,38 +718,58 @@ body {
   padding: 60px 0;
 }
 
-.login-badge {
+/* pill v3 — pequeno label acima do título */
+.login-v3-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 10px;
   font-weight: 700;
-  color: #60a5fa;
-  background: rgba(59,130,246,0.1);
-  border: 1px solid rgba(59,130,246,0.2);
-  padding: 5px 12px;
+  color: #93c5fd;
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.25);
+  padding: 4px 10px;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  margin-bottom: 28px;
+  margin-bottom: 10px;
   width: fit-content;
 }
 
-.login-headline {
-  font-size: 38px;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.5px;
-  color: #fff;
-  margin-bottom: 16px;
+/* wrapper do bloco de identidade */
+.login-brand-hero {
+  margin-bottom: 18px;
 }
 
+/* título principal — "Plataforma" */
+.login-headline {
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 0.97;
+  letter-spacing: -2px;
+  background: linear-gradient(140deg, #ffffff 0%, #ffffff 35%, #93c5fd 70%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+/* tagline — abaixo do título, bem menor */
+.login-tagline {
+  font-size: 16px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.38);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+/* descrição — sutil */
 .login-subline {
-  font-size: 15px;
-  color: #475569;
-  line-height: 1.65;
+  font-size: 12.5px;
+  color: #2d3a4f;
+  line-height: 1.7;
   max-width: 340px;
-  margin-bottom: 44px;
+  margin-bottom: 36px;
 }
 
 .login-features {
@@ -716,9 +782,14 @@ body {
   align-items: center;
   gap: 14px;
 }
+.login-feature-text {
+  font-size: 12px;
+  color: #2d3a4f;
+  line-height: 1.4;
+}
 .login-feature-icon {
-  width: 36px; height: 36px;
-  border-radius: 10px;
+  width: 34px; height: 34px;
+  border-radius: 9px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   display: flex; align-items: center; justify-content: center;
@@ -871,6 +942,77 @@ body {
 .login-submit:hover:not(:disabled)  { background: #1d4ed8; box-shadow: 0 6px 24px rgba(37,99,235,0.4); transform: translateY(-1px); }
 .login-submit:active:not(:disabled) { background: #1e40af; transform: translateY(0); }
 .login-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* botão tema na tela de login */
+.login-theme-btn {
+  position: absolute;
+  top: 20px; right: 20px;
+  z-index: 10;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.login-theme-btn:hover { background: rgba(255,255,255,0.1); color: #94a3b8; }
+
+/* ─── Login — tema claro ─── */
+[data-theme="light"] .login-shell       { background: #f1f5f9; }
+[data-theme="light"] .login-right-glow  { background: radial-gradient(ellipse at center, rgba(59,130,246,0.06) 0%, transparent 65%); }
+[data-theme="light"] .login-title       { color: #0f172a; }
+[data-theme="light"] .login-subtitle    { color: #64748b; }
+[data-theme="light"] .login-switcher    { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .login-switcher-btn        { color: #94a3b8; }
+[data-theme="light"] .login-switcher-btn:hover  { color: #64748b; }
+[data-theme="light"] .login-input {
+  background: #fff;
+  border-color: rgba(0,0,0,0.12);
+  color: #0f172a;
+}
+[data-theme="light"] .login-input::placeholder { color: #94a3b8; }
+[data-theme="light"] .login-input:hover        { border-color: rgba(0,0,0,0.22); }
+[data-theme="light"] .login-label    { color: #475569; }
+[data-theme="light"] .login-eye-btn  { color: #94a3b8; }
+[data-theme="light"] .login-eye-btn:hover { color: #64748b; }
+[data-theme="light"] .login-theme-btn {
+  background: rgba(0,0,0,0.05);
+  border-color: rgba(0,0,0,0.1);
+}
+[data-theme="light"] .login-theme-btn:hover { background: rgba(0,0,0,0.09); color: #475569; }
+
+/* ─── Login esquerdo — tema claro ─── */
+[data-theme="light"] .login-left {
+  background: #f0f4ff;
+  border-right-color: rgba(0,0,0,0.07);
+}
+[data-theme="light"] .login-glow-1 {
+  background: radial-gradient(circle, rgba(37,99,235,0.1) 0%, transparent 70%);
+}
+[data-theme="light"] .login-glow-2 {
+  background: radial-gradient(circle, rgba(79,70,229,0.07) 0%, transparent 70%);
+}
+[data-theme="light"] .login-headline {
+  background: linear-gradient(140deg, #0f172a 0%, #1e3a8a 50%, #4338ca 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+[data-theme="light"] .login-v3-pill {
+  color: #2563eb;
+  background: rgba(37,99,235,0.09);
+  border-color: rgba(37,99,235,0.22);
+}
+[data-theme="light"] .login-tagline  { color: rgba(0,0,0,0.4); }
+[data-theme="light"] .login-subline  { color: #64748b; }
+[data-theme="light"] .login-feature-text { color: #64748b; }
+[data-theme="light"] .login-feature-icon {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .login-feature-icon svg { color: #3b82f6; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.8s linear infinite; }
@@ -1107,6 +1249,12 @@ table.users-table {
 .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ── MODAL ── */
+/* ── Modal animations ── */
+@keyframes backdrop-in  { from { opacity: 0 }                                   to { opacity: 1 } }
+@keyframes backdrop-out { from { opacity: 1 }                                   to { opacity: 0 } }
+@keyframes modal-in     { from { opacity: 0; transform: scale(0.96) translateY(12px) } to { opacity: 1; transform: none } }
+@keyframes modal-out    { from { opacity: 1; transform: none }                   to { opacity: 0; transform: scale(0.96) translateY(8px) } }
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1117,6 +1265,10 @@ table.users-table {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  animation: backdrop-in 0.18s ease forwards;
+}
+.modal-backdrop.modal-closing {
+  animation: backdrop-out 0.18s ease forwards;
 }
 .modal {
   background: var(--bg-modal);
@@ -1129,6 +1281,10 @@ table.users-table {
   flex-direction: column;
   box-shadow: 0 32px 64px rgba(0,0,0,0.4);
   overflow: hidden;
+  animation: modal-in 0.22s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+.modal.modal-closing {
+  animation: modal-out 0.18s ease forwards;
 }
 .modal-lg { max-width: 680px; }
 .modal-header {
@@ -2199,7 +2355,7 @@ table.users-table {
 @media (max-width: 1023px) {
   .topbar {
     padding: 0 12px;
-    gap: 8px;
+    gap: 6px;
   }
 
   /* Oculta texto do breadcrumb em telas pequenas, mantém apenas o nome da página */
@@ -2207,23 +2363,38 @@ table.users-table {
     display: none;
   }
 
+  /* Breadcrumb não quebra linha — trunca com ellipsis */
+  .topbar-breadcrumb-page {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+  }
+
   /* Comprime o user-pill: esconde o nome, só mostra avatar */
   .user-pill-name {
     display: none;
   }
   .user-pill {
-    padding: 0 8px;
+    padding: 0 6px;
     gap: 0;
   }
 
-  /* Badge de empresa do cliente: texto truncado menor */
+  /* Company selector customizado: mais compacto no topbar */
   .company-selector-wrap {
-    max-width: 140px;
+    max-width: 130px;
+    padding: 0 8px;
   }
-  .company-selector {
-    min-width: 100px;
-    max-width: 120px;
+  .cs-label {
+    max-width: 80px;
+    min-width: 0;
     font-size: 12px;
+  }
+  /* Dropdown alinhado à direita no mobile */
+  .cs-dropdown {
+    left: auto;
+    right: 0;
+    min-width: 200px;
   }
 }
 
@@ -2242,15 +2413,41 @@ table.users-table {
   .page-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 10px;
+    margin-bottom: 14px;
   }
   .page-header > div:last-child,
   .page-header > button {
     align-self: flex-start;
   }
   .page-header-left h1 {
-    font-size: 18px;
+    font-size: 17px;
+  }
+  /* Botões no page-header mais compactos */
+  .page-header .btn {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    gap: 5px;
+  }
+  .page-header .btn svg {
+    width: 13px;
+    height: 13px;
+  }
+  /* Form selects: full width no mobile (sobrescreve inline min-width) */
+  select.form-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 38px;
+    box-sizing: border-box;
+  }
+  /* Search input: full width ao envolver */
+  .search-input-wrap {
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 1 1 100% !important;
+    width: 100%;
   }
 }
 
@@ -2483,6 +2680,39 @@ table.users-table {
   .dropdown {
     right: -8px;
     min-width: 220px;
+  }
+}
+
+/* ── Topbar: extra compacto em telas muito pequenas ── */
+@media (max-width: 480px) {
+  /* Esconde o bell no mobile: sem notificações por enquanto */
+  .topbar-bell { display: none; }
+  /* Theme toggle menor */
+  .theme-toggle-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+  /* User pill mínimo */
+  .user-pill {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 8px;
+  }
+  /* Company selector: apenas ícone + chevron em telas muito pequenas */
+  .cs-label {
+    display: none;
+  }
+  .company-selector-wrap.cs-custom {
+    max-width: 52px;
+    padding: 0 8px;
+    gap: 2px;
+  }
+  /* Breadcrumb: esconder o ChevronRight separador também */
+  .topbar-breadcrumb-page {
+    font-size: 12px;
+    max-width: 130px;
   }
 }
 

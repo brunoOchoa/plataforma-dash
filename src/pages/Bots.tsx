@@ -17,6 +17,7 @@ import type { Department }     from '../types/department';
 import type { KnowledgeBase }  from '../types/knowledgebase';
 import AppShell from '../components/AppShell';
 import { useCompany } from '../context/CompanyContext';
+import { useModalAnimation } from '../hooks/useModalAnimation';
 
 /* ══════════════════════════════════════
    TOAST
@@ -157,15 +158,16 @@ function BotModal({ bot, allDepartments, defaultDeptId, defaultCompanyId, defaul
     }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3>{isEdit ? 'Editar Bot' : 'Novo Bot'}</h3>
             <p>{isEdit ? `Editando ${bot!.name}` : 'Configure um novo agente de IA para um departamento'}</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -294,7 +296,7 @@ function BotModal({ bot, allDepartments, defaultDeptId, defaultCompanyId, defaul
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close} disabled={saving}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
             {saving ? <><span className="spinner-sm" /> Salvando…</> : <><Check size={14} />{isEdit ? 'Salvar' : 'Criar Bot'}</>}
           </button>
@@ -380,9 +382,10 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
     }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal-lg" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -390,7 +393,7 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
             </h3>
             <p>{bot.name} · {setting ? 'Editar configuração existente' : 'Criar configuração'}</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -480,7 +483,7 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={saving || loading}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close} disabled={saving || loading}>Cancelar</button>
           {!loading && (
             <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
               {saving
@@ -506,9 +509,10 @@ function DeleteModal({ bot, onClose, onConfirm }: { bot: Bot; onClose: () => voi
     catch (err: any) { setError(err?.response?.data?.message ?? 'Erro ao desativar bot'); }
     finally { setLoading(false); }
   };
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal confirm-modal" onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal confirm-modal${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="modal-body" style={{ textAlign: 'center', padding: '32px 28px 20px' }}>
           <div className="confirm-icon"><Trash2 size={22} color="#f87171" /></div>
           <h4>Desativar Bot?</h4>
@@ -516,7 +520,7 @@ function DeleteModal({ bot, onClose, onConfirm }: { bot: Bot; onClose: () => voi
           {error && <div className="api-error-box" style={{ marginTop: 16, textAlign: 'left' }}><AlertTriangle size={13} style={{ flexShrink: 0 }} /><span>{error}</span></div>}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close} disabled={loading}>Cancelar</button>
           <button className="btn btn-danger" onClick={handle} disabled={loading}>
             {loading ? <><span className="spinner-sm" /> Desativando…</> : <><Trash2 size={14} /> Desativar</>}
           </button>

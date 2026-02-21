@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, Bot, Shield, Settings,
-  LogOut, Bell, X, Zap, ChevronRight, Menu, FolderOpen, BookOpen,
-  Sun, Moon,
+  LogOut, Bell, X, Zap, ChevronRight, ChevronDown, Menu, FolderOpen, BookOpen,
+  Sun, Moon, Check,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCompany } from '../context/CompanyContext';
@@ -27,31 +27,63 @@ function NavItem({ icon: Icon, label, active, onClick }: {
   );
 }
 
-/* ── CompanySelector — dropdown para usuários HITSS ── */
+/* ── CompanySelector — dropdown customizado para usuários HITSS ── */
 function CompanySelector() {
   const { selectedCompany, setSelectedCompany, companies } = useCompany();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
-    if (!id) { setSelectedCompany(null); return; }
-    const found = companies.find(c => c.id === id);
-    if (found) setSelectedCompany({ id: found.id, name: found.name });
+  // Fecha ao clicar fora
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const select = (company: { id: string; name: string } | null) => {
+    setSelectedCompany(company);
+    setOpen(false);
   };
 
+  const label = selectedCompany?.name ?? 'Todas Empresas';
+
   return (
-    <div className="company-selector-wrap">
+    <div className="company-selector-wrap cs-custom" ref={ref} onClick={() => setOpen(o => !o)}>
       <Building2 size={14} color="#475569" style={{ flexShrink: 0 }} />
-      <select
-        className="company-selector"
-        value={selectedCompany?.id ?? ''}
-        onChange={handleChange}
-        title="Empresa de contexto"
-      >
-        <option value="">Todas Empresas</option>
-        {companies.map(c => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
+      <span className="cs-label">{label}</span>
+      <ChevronDown size={12} className={`cs-chevron ${open ? 'open' : ''}`} />
+
+      {open && (
+        <div className="cs-dropdown" onClick={e => e.stopPropagation()}>
+          {/* Todas empresas */}
+          <div
+            className={`cs-option ${!selectedCompany ? 'active' : ''}`}
+            onClick={() => select(null)}
+          >
+            <span>Todas Empresas</span>
+            {!selectedCompany && <Check size={12} />}
+          </div>
+
+          {companies.length > 0 && <div className="cs-divider" />}
+
+          {companies.map(c => (
+            <div
+              key={c.id}
+              className={`cs-option ${selectedCompany?.id === c.id ? 'active' : ''}`}
+              onClick={() => select(c)}
+            >
+              <span>{c.name}</span>
+              {selectedCompany?.id === c.id && <Check size={12} />}
+            </div>
+          ))}
+
+          {companies.length === 0 && (
+            <div className="cs-empty">Carregando empresas…</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -254,30 +286,30 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </button>
 
           {/* Breadcrumb */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, overflow: 'hidden' }}>
             <span className="topbar-breadcrumb-sep">Plataforma</span>
-            <ChevronRight size={12} style={{ color: 'var(--border-input)' }} />
+            <ChevronRight size={12} style={{ color: 'var(--border-input)', flexShrink: 0 }} />
             <span className="topbar-breadcrumb-page">{pageLabel}</span>
           </div>
 
           {/* Right */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
 
             {/* ── Empresa: dropdown para HITSS sistema, badge fixo para cliente ── */}
             {isHitss && !isCustomer && <CompanySelector />}
             {isCustomer             && <CustomerCompanyBadge />}
 
             {/* Bell */}
-            <button style={{
-              position: 'relative', width: 36, height: 36,
+            <button className="topbar-bell" style={{
+              position: 'relative', width: 34, height: 34,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
-              borderRadius: 10, transition: 'all 0.15s',
+              borderRadius: 9, transition: 'all 0.15s',
             }}>
-              <Bell size={17} />
+              <Bell size={16} />
               <span style={{
                 position: 'absolute', top: 8, right: 8,
-                width: 6, height: 6, background: '#3b82f6',
+                width: 5, height: 5, background: '#3b82f6',
                 borderRadius: '50%', border: '2px solid var(--bg-body)',
               }} />
             </button>

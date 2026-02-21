@@ -12,6 +12,7 @@ import type { Department, CreateDepartmentRequest, UpdateDepartmentRequest } fro
 import type { Company } from '../types/company';
 import AppShell from '../components/AppShell';
 import { useCompany } from '../context/CompanyContext';
+import { useModalAnimation } from '../hooks/useModalAnimation';
 
 /* ══════════════════════════════════════
    TOAST
@@ -113,15 +114,16 @@ function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName
     }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3>{isEdit ? 'Editar Departamento' : 'Novo Departamento'}</h3>
             <p>{isEdit ? `Editando ${dept!.name}` : 'Preencha os dados do novo departamento'}</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         <div className="modal-body">
@@ -200,7 +202,7 @@ function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close} disabled={saving}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
             {saving ? <><span className="spinner-sm" /> Salvando…</> : <><Check size={14} />{isEdit ? 'Salvar' : 'Criar Departamento'}</>}
           </button>
@@ -222,9 +224,10 @@ function DeleteModal({ dept, onClose, onConfirm }: { dept: Department; onClose: 
     catch (err: any) { setError(err?.response?.data?.message ?? 'Erro ao desativar departamento'); }
     finally { setLoading(false); }
   };
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal confirm-modal" onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal confirm-modal${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="modal-body" style={{ textAlign: 'center', padding: '32px 28px 20px' }}>
           <div className="confirm-icon"><Trash2 size={22} color="#f87171" /></div>
           <h4>Desativar Departamento?</h4>
@@ -232,7 +235,7 @@ function DeleteModal({ dept, onClose, onConfirm }: { dept: Department; onClose: 
           {error && <div className="api-error-box" style={{ marginTop: 16, textAlign: 'left' }}><AlertTriangle size={13} style={{ flexShrink: 0 }} /><span>{error}</span></div>}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close} disabled={loading}>Cancelar</button>
           <button className="btn btn-danger" onClick={handle} disabled={loading}>
             {loading ? <><span className="spinner-sm" /> Desativando…</> : <><Trash2 size={14} /> Desativar</>}
           </button>

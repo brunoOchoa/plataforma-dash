@@ -8,6 +8,7 @@ import { systemUserService, customerUserService } from '../services/userService'
 import { systemRoleService, customerRoleService } from '../services/roleService';
 import type { SystemUser, CustomerUser, Role, Page } from '../types/user';
 import AppShell from '../components/AppShell';
+import { useModalAnimation } from '../hooks/useModalAnimation';
 
 /* ═══════════════════════════════════════
    TOAST
@@ -201,9 +202,10 @@ function ManageRolesModal({
   const initials  = (user.name || user.email).replace(/[^a-zA-Z\s]/g, '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'US';
   const totalSel  = selected.size;
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal-roles" onClick={e => e.stopPropagation()}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal modal-roles${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
 
         {/* ── header ── */}
         <div className="modal-header">
@@ -219,7 +221,7 @@ function ManageRolesModal({
               </p>
             </div>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         {/* ── search bar ── */}
@@ -275,7 +277,7 @@ function ManageRolesModal({
           <span style={{ fontSize: 12, color: '#475569', flex: 1 }}>
             {changed ? '● Há mudanças não salvas' : '✓ Sem alterações'}
           </span>
-          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>
+          <button className="btn btn-secondary" onClick={close} disabled={saving}>
             Cancelar
           </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving || !changed}>

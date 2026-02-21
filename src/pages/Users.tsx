@@ -15,6 +15,7 @@ import type { Department as DeptType } from '../types/department';
 import { useAuth } from '../context/AuthContext';
 import { useCompany } from '../context/CompanyContext';
 import AppShell from '../components/AppShell';
+import { useModalAnimation } from '../hooks/useModalAnimation';
 
 /* ─── Toast ─── */
 type ToastType = 'success' | 'error';
@@ -98,15 +99,16 @@ function SystemUserModal({
     }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal modal-lg">
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={e => e.target === e.currentTarget && close()}>
+      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`}>
         <div className="modal-header">
           <div>
             <h3>{isEdit ? 'Editar Usuário' : 'Novo Usuário do Sistema'}</h3>
             <p>{isEdit ? `Editando ${user!.name}` : 'Preencha os dados para criar um novo usuário'}</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         <form onSubmit={submit}>
@@ -168,7 +170,7 @@ function SystemUserModal({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? <><span className="spinner" style={{ width: 14, height: 14, margin: 0 }} /> Salvando…</> : <><Check size={15} /> {isEdit ? 'Salvar alterações' : 'Criar usuário'}</>}
             </button>
@@ -259,15 +261,16 @@ function CustomerUserModal({
     }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal modal-lg" style={{ maxWidth: 720, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={e => e.target === e.currentTarget && close()}>
+      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 720, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-header" style={{ flexShrink: 0 }}>
           <div>
             <h3>{isEdit ? 'Editar Usuário Cliente' : 'Novo Usuário Cliente'}</h3>
             <p>{isEdit ? `Editando ${user!.name}` : 'Preencha os dados para criar um novo usuário'}</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -471,7 +474,7 @@ function CustomerUserModal({
           </div>
 
           <div className="modal-footer" style={{ flexShrink: 0 }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading
                 ? <><span className="spinner" style={{ width: 14, height: 14, margin: 0 }} /> Salvando…</>
@@ -510,15 +513,16 @@ function ChangePasswordModal({
     }
   };
 
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={e => e.target === e.currentTarget && close()}>
+      <div className={`modal${closing ? ' modal-closing' : ''}`}>
         <div className="modal-header">
           <div>
             <h3>Trocar Senha</h3>
             <p>Usuário: {userName}</p>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
         <form onSubmit={submit}>
           <div className="modal-body">
@@ -555,7 +559,7 @@ function ChangePasswordModal({
             </div>
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn btn-secondary" onClick={close}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? 'Salvando…' : <><KeyRound size={14} /> Trocar senha</>}
             </button>
@@ -572,16 +576,17 @@ function ChangePasswordModal({
 function DeleteModal({
   name, onClose, onConfirm, loading,
 }: { name: string; onClose: () => void; onConfirm: () => void; loading: boolean }) {
+  const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal confirm-modal">
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={e => e.target === e.currentTarget && close()}>
+      <div className={`modal confirm-modal${closing ? ' modal-closing' : ''}`}>
         <div className="modal-body">
           <div className="confirm-icon"><Trash2 size={22} color="#f87171" /></div>
           <h4>Excluir usuário?</h4>
           <p>Você está prestes a excluir <strong style={{ color: '#e2e8f0' }}>{name}</strong>. Esta ação não pode ser desfeita.</p>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={close}>Cancelar</button>
           <button className="btn btn-danger" onClick={onConfirm} disabled={loading}>
             {loading ? 'Excluindo…' : <><Trash2 size={14} /> Excluir</>}
           </button>
