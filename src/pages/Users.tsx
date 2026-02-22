@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Plus, Pencil, Trash2, KeyRound, Users as UsersIcon,
   X, Check, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw,
@@ -56,6 +57,71 @@ function Badge({ active }: { active: boolean }) {
     <span className={`pill ${active ? 'pill-green' : 'pill-gray'}`}>
       {active ? <><UserCheck size={10} /> Ativo</> : <><UserX size={10} /> Inativo</>}
     </span>
+  );
+}
+
+/* ─── RolesBadges — mini pills com popover ao hover ─── */
+function RolesBadges({ roles }: { roles: Role[] }) {
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+
+  const showPopover = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (!triggerRef.current || roles.length <= 2) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setPopoverPos({ top: rect.bottom + 6, left: rect.left });
+  };
+
+  const hidePopover = () => {
+    closeTimer.current = setTimeout(() => setPopoverPos(null), 150);
+  };
+
+  const keepPopover = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+
+  if (roles.length === 0) return <span style={{ fontSize: 12, color: '#334155' }}>—</span>;
+
+  const topRoles = roles.slice(0, 2);
+  const extra    = roles.length - 2;
+
+  return (
+    <>
+      <div
+        ref={triggerRef}
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}
+        onMouseEnter={showPopover}
+        onMouseLeave={hidePopover}
+      >
+        {topRoles.map(r => (
+          <span key={r.id} className="pill pill-blue" style={{ fontSize: 10 }}>
+            {r.name.replace(/^(SYSTEM_|CUSTOMER_)/, '')}
+          </span>
+        ))}
+        {extra > 0 && (
+          <span className="pill pill-gray" style={{ fontSize: 10, cursor: 'default' }}>+{extra}</span>
+        )}
+      </div>
+      {popoverPos && createPortal(
+        <div
+          className="roles-popover"
+          style={{ position: 'fixed', top: popoverPos.top, left: popoverPos.left }}
+          onMouseEnter={keepPopover}
+          onMouseLeave={hidePopover}
+        >
+          <div className="roles-popover-title">Todas as roles ({roles.length})</div>
+          <div className="roles-popover-list">
+            {roles.map(r => (
+              <span key={r.id} className="pill pill-blue" style={{ fontSize: 10 }}>
+                {r.name.replace(/^(SYSTEM_|CUSTOMER_)/, '')}
+              </span>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -792,23 +858,7 @@ export default function Users() {
                   <td data-label="Status"><Badge active={u.active} /></td>
                   <td data-label="Criado em" style={{ fontSize: 12 }}>{fmtDate(u.createdAt)}</td>
                   <td data-label="Roles">
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {(isSystemUser(u) ? u.roles : (u as CustomerUser).roles)
-                        .slice(0, 2)
-                        .map(r => (
-                          <span key={r.id} className="pill pill-blue" style={{ fontSize: 10 }}>
-                            {r.name.replace(/^(SYSTEM_|CUSTOMER_)/, '')}
-                          </span>
-                        ))}
-                      {(isSystemUser(u) ? u.roles : (u as CustomerUser).roles).length > 2 && (
-                        <span className="pill pill-gray" style={{ fontSize: 10 }}>
-                          +{(isSystemUser(u) ? u.roles : (u as CustomerUser).roles).length - 2}
-                        </span>
-                      )}
-                      {(isSystemUser(u) ? u.roles : (u as CustomerUser).roles).length === 0 && (
-                        <span style={{ fontSize: 12, color: '#334155' }}>—</span>
-                      )}
-                    </div>
+                    <RolesBadges roles={isSystemUser(u) ? u.roles : (u as CustomerUser).roles} />
                   </td>
                   <td>
                     <div className="actions-cell">

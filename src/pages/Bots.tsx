@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Plus, Pencil, Trash2,
@@ -38,6 +39,75 @@ function useToast() {
 ══════════════════════════════════════ */
 function botInitials(name: string) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+/* ══════════════════════════════════════
+   KBS CELL — badge + popover ao hover
+══════════════════════════════════════ */
+function KbsCell({ kbs }: { kbs: { id: string; name: string }[] }) {
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+
+  const showPopover = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (!triggerRef.current || kbs.length === 0) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const left = Math.min(rect.left, window.innerWidth - 260);
+    setPopoverPos({ top: rect.bottom + 6, left });
+  };
+
+  const hidePopover = () => {
+    closeTimer.current = setTimeout(() => setPopoverPos(null), 150);
+  };
+
+  const keepPopover = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+
+  if (kbs.length === 0) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <BookOpen size={12} color="#475569" />
+        <span style={{ fontSize: 13, color: '#94a3b8' }}>—</span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div
+        ref={triggerRef}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'default' }}
+        onMouseEnter={showPopover}
+        onMouseLeave={hidePopover}
+      >
+        <BookOpen size={12} color="#475569" />
+        <span className="kbs-count-badge">
+          {kbs.length} {kbs.length === 1 ? 'base' : 'bases'}
+        </span>
+      </div>
+      {popoverPos && createPortal(
+        <div
+          className="roles-popover"
+          style={{ position: 'fixed', top: popoverPos.top, left: popoverPos.left }}
+          onMouseEnter={keepPopover}
+          onMouseLeave={hidePopover}
+        >
+          <div className="roles-popover-title">Bases de Conhecimento · {kbs.length}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
+            {kbs.map(kb => (
+              <div key={kb.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BookOpen size={11} color="#60a5fa" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.3 }}>{kb.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
 }
 
 /* ══════════════════════════════════════
@@ -737,14 +807,7 @@ export default function Bots() {
                         </div>
                       </td>
                       <td data-label="Bases">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <BookOpen size={12} color="#475569" />
-                          <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                            {(b.knowledgeBases?.length ?? 0) > 0
-                              ? `${b.knowledgeBases!.length} base${b.knowledgeBases!.length !== 1 ? 's' : ''}`
-                              : '—'}
-                          </span>
-                        </div>
+                        <KbsCell kbs={b.knowledgeBases ?? []} />
                       </td>
                       <td data-label="Status">
                         <span className={`pill ${b.active ? 'pill-green' : 'pill-gray'}`}>

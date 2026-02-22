@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Shield, ChevronLeft, ChevronRight,
   X, Check, AlertTriangle, RefreshCw, UserCheck,
@@ -293,12 +294,82 @@ function ManageRolesModal({
 }
 
 /* ═══════════════════════════════════════
+   ROLES CELL — badge com contagem + popover agrupado ao hover
+═══════════════════════════════════════ */
+function RolesCell({ roles, categories }: { roles: Role[]; categories: RoleCategory[] }) {
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+
+  const groups = groupRoles(roles, categories);
+
+  const showPopover = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (!triggerRef.current || roles.length === 0) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    // ajusta para não sair da janela à direita
+    const left = Math.min(rect.left, window.innerWidth - 280);
+    setPopoverPos({ top: rect.bottom + 6, left });
+  };
+
+  const hidePopover = () => {
+    closeTimer.current = setTimeout(() => setPopoverPos(null), 150);
+  };
+
+  const keepPopover = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+
+  if (roles.length === 0) {
+    return <span style={{ fontSize: 12, color: '#334155', fontStyle: 'italic' }}>Sem roles</span>;
+  }
+
+  return (
+    <>
+      <span
+        ref={triggerRef}
+        className="roles-count-badge"
+        onMouseEnter={showPopover}
+        onMouseLeave={hidePopover}
+      >
+        {roles.length} {roles.length === 1 ? 'role' : 'roles'}
+      </span>
+      {popoverPos && createPortal(
+        <div
+          className="roles-popover"
+          style={{ position: 'fixed', top: popoverPos.top, left: popoverPos.left }}
+          onMouseEnter={keepPopover}
+          onMouseLeave={hidePopover}
+        >
+          <div className="roles-popover-title">Roles ativas · {roles.length}</div>
+          <div className="roles-popover-body">
+            {groups.map(({ category, roles: gr }) => (
+              <div key={category.label} className="roles-popover-group">
+                <span className={`roles-popover-cat ${category.color}`}>{category.label}</span>
+                <div className="roles-popover-list">
+                  {gr.map(r => (
+                    <span key={r.id} className="role-tag">{roleLabel(r.name)}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════
    USER ROW
 ═══════════════════════════════════════ */
-function UserRow({ user, onManage }: { user: SystemUser | CustomerUser; onManage: () => void }) {
+function UserRow({ user, categories, onManage }: {
+  user: SystemUser | CustomerUser;
+  categories: RoleCategory[];
+  onManage: () => void;
+}) {
   const initials  = (user.name || user.email).replace(/[^a-zA-Z\s]/g, '').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'US';
-  const topRoles  = user.roles.slice(0, 4);
-  const extra     = user.roles.length - 4;
 
   return (
     <tr>
@@ -312,15 +383,7 @@ function UserRow({ user, onManage }: { user: SystemUser | CustomerUser; onManage
         </div>
       </td>
       <td>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
-          {topRoles.map(r => (
-            <span key={r.id} className="role-tag">{roleLabel(r.name)}</span>
-          ))}
-          {extra > 0 && <span className="role-tag role-tag-more">+{extra}</span>}
-          {user.roles.length === 0 && (
-            <span style={{ fontSize: 12, color: '#334155', fontStyle: 'italic' }}>Sem roles</span>
-          )}
-        </div>
+        <RolesCell roles={user.roles} categories={categories} />
       </td>
       <td>
         <span className={`pill ${user.active ? 'pill-green' : 'pill-gray'}`}>
@@ -506,7 +569,7 @@ export default function Permissions() {
                       </div>
                     </td></tr>
                   ) : users.map(u => (
-                    <UserRow key={u.id} user={u} onManage={() => setManaging(u)} />
+                    <UserRow key={u.id} user={u} categories={categories} onManage={() => setManaging(u)} />
                   ))}
                 </tbody>
               </table>

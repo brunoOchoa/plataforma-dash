@@ -20,9 +20,9 @@ function NavItem({ icon: Icon, label, active, onClick }: {
 }) {
   return (
     <button onClick={onClick} className={`nav-item ${active ? 'active' : ''}`}>
-      <Icon size={16} style={{ flexShrink: 0 }} />
+      <span className="nav-item-icon"><Icon size={16} /></span>
       <span style={{ flex: 1 }}>{label}</span>
-      {!active && <ChevronRight size={12} style={{ opacity: 0.3 }} />}
+      {!active && <span className="nav-item-arrow"><ChevronRight size={12} /></span>}
     </button>
   );
 }
