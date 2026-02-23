@@ -16,18 +16,18 @@ export const knowledgebaseService = {
     if (companyId)    p['companyId']    = companyId;
     if (departmentId) p['departmentId'] = departmentId;
     if (modelType)    p['modelType']    = modelType;
-    return api.get<KnowledgeBasePage>('/customer/knowledge-base', { params: p }).then(r => r.data);
+    return api.get<KnowledgeBasePage>('/knowledge-base', { params: p }).then(r => r.data);
   },
 
   getById: (id: string) =>
-    api.get<KnowledgeBase>(`/customer/knowledge-base/${id}`).then(r => r.data),
+    api.get<KnowledgeBase>(`/knowledge-base/${id}`).then(r => r.data),
 
   create: (body: CreateKnowledgeBaseRequest) =>
-    api.post<KnowledgeBase>('/customer/knowledge-base', body).then(r => r.data),
+    api.post<KnowledgeBase>('/knowledge-base', body).then(r => r.data),
 
   update: (id: string, body: UpdateKnowledgeBaseRequest) =>
-    api.put<KnowledgeBase>(`/customer/knowledge-base/${id}`, body).then(r => r.data),
+    api.put<KnowledgeBase>(`/knowledge-base/${id}`, body).then(r => r.data),
 
   remove: (id: string) =>
-    api.delete(`/customer/knowledge-base/${id}`).then(r => r.data),
+    api.delete(`/knowledge-base/${id}`).then(r => r.data),
 };

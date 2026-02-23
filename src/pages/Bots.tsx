@@ -380,64 +380,78 @@ function BotModal({ bot, allDepartments, defaultDeptId, defaultCompanyId, defaul
    BOT SETTING MODAL
 ══════════════════════════════════════ */
 function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
-  const [loading,  setLoading]  = useState(true);
-  const [saving,   setSaving]   = useState(false);
-  const [setting,  setSetting]  = useState<BotSettingResponse | null>(null);
-  const [errors,   setErrors]   = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [setting, setSetting] = useState<BotSettingResponse | null>(null);
+  const [apiError, setApiError] = useState('');
 
-  // Campos do form como strings (JSON editável em textarea)
-  const [form, setForm] = useState({
-    phoneNumberId:        '',
-    verifyToken:          '',
-    metaSettings:         '{}',
-    orchestratorSettings: '{}',
-  });
+  // ── Meta (WhatsApp/Meta API) ──────────────────────
+  const [phoneNumberId, setPhoneNumberId] = useState('');
+  const [verifyToken,   setVerifyToken]   = useState('');
+  const [accessToken,   setAccessToken]   = useState('');
+  const [apiVersion,    setApiVersion]    = useState('v23.0');
 
-  const setF = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }));
+  // ── Orchestrator ──────────────────────────────────
+  const [ragMaxResults,           setRagMaxResults]           = useState('9');
+  const [ragMinSimilarity,        setRagMinSimilarity]        = useState('0.3');
+  const [chatTokensLimit,         setChatTokensLimit]         = useState('2000');
+  const [chatMessagesLimit,       setChatMessagesLimit]       = useState('30');
+  const [summaryTriggerRatio,     setSummaryTriggerRatio]     = useState('0.7');
+  const [conversationTimeoutMin,  setConversationTimeoutMin]  = useState('30');
 
-  // Carrega setting existente (404 = ainda não foi criado)
   useEffect(() => {
     setLoading(true);
     botSettingService.getByBotId(bot.id)
       .then(s => {
         setSetting(s);
-        setForm({
-          phoneNumberId:        s.phoneNumberId ?? '',
-          verifyToken:          s.verifyToken   ?? '',
-          metaSettings:         '{}',  // metaSettings é criptografado, não retorna no response
-          orchestratorSettings: s.orchestratorSettings
-            ? JSON.stringify(s.orchestratorSettings, null, 2)
-            : '{}',
-        });
+        setPhoneNumberId(s.phoneNumberId ?? '');
+        setVerifyToken(s.verifyToken ?? '');
+        // meta_settings é criptografado — não retorna; access_token e apiVersion ficam em branco
+        const o = s.orchestratorSettings as Record<string, unknown> | null;
+        if (o) {
+          if (o.rag_max_results          != null) setRagMaxResults(String(o.rag_max_results));
+          if (o.rag_min_similarity       != null) setRagMinSimilarity(String(o.rag_min_similarity));
+          if (o.chat_tokens_limit        != null) setChatTokensLimit(String(o.chat_tokens_limit));
+          if (o.chat_messages_limit      != null) setChatMessagesLimit(String(o.chat_messages_limit));
+          if (o.summary_trigger_ratio    != null) setSummaryTriggerRatio(String(o.summary_trigger_ratio));
+          if (o.conversation_timeout_minutes != null) setConversationTimeoutMin(String(o.conversation_timeout_minutes));
+        }
       })
-      .catch(() => {
-        // 404 = sem setting ainda → modo create
-        setSetting(null);
-      })
+      .catch(() => setSetting(null))
       .finally(() => setLoading(false));
   }, [bot.id]);
 
-  const parseJson = (str: string, field: string): Record<string, unknown> | null => {
-    if (!str.trim() || str.trim() === '{}') return null;
-    try { return JSON.parse(str); }
-    catch { setErrors(p => ({ ...p, [field]: 'JSON inválido' })); return undefined as any; }
-  };
-
   const handleSubmit = async () => {
-    setErrors({});
-    const meta  = parseJson(form.metaSettings,         'metaSettings');
-    const orch  = parseJson(form.orchestratorSettings,  'orchestratorSettings');
-    if (meta === undefined || orch === undefined) return; // JSON inválido
-
+    setApiError('');
     setSaving(true);
     try {
+      const phone = phoneNumberId.trim() || null;
+      const token = verifyToken.trim()   || null;
+
+      // meta_settings: só envia se access_token preenchido (criptografado, não volta na response)
+      const hasMetaData = accessToken.trim().length > 0;
+      const meta_settings = hasMetaData ? {
+        verify_token:    token,
+        access_token:    accessToken.trim(),
+        phone_number_id: phone,
+        api_version:     apiVersion.trim() || 'v23.0',
+      } : null;
+
       const body = {
-        bot_id:                 bot.id,
-        phone_number_id:        form.phoneNumberId.trim()  || null,
-        verify_token:           form.verifyToken.trim()    || null,
-        meta_settings:          meta,
-        orchestrator_settings:  orch,
+        bot_id:          bot.id,
+        phone_number_id: phone,
+        verify_token:    token,
+        meta_settings,
+        orchestrator_settings: {
+          rag_max_results:                parseFloat(ragMaxResults)          || 9,
+          rag_min_similarity:             parseFloat(ragMinSimilarity)       || 0.3,
+          chat_tokens_limit:              parseInt(chatTokensLimit)          || 2000,
+          chat_messages_limit:            parseInt(chatMessagesLimit)        || 30,
+          summary_trigger_ratio:          parseFloat(summaryTriggerRatio)    || 0.7,
+          conversation_timeout_minutes:   parseInt(conversationTimeoutMin)   || 30,
+        },
       };
+
       if (setting) {
         await botSettingService.update(setting.id, body);
       } else {
@@ -446,107 +460,106 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
       onClose();
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao salvar configuração';
-      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+      setApiError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setSaving(false);
     }
   };
 
+  const numInput = (label: string, value: string, onChange: (v: string) => void, hint?: string, step?: string) => (
+    <div className="form-field" style={{ flex: 1, minWidth: 140 }}>
+      <label className="form-label">{label}{hint && <span className="form-hint" style={{ marginLeft: 4 }}>{hint}</span>}</label>
+      <input className="form-input" type="number" step={step ?? '1'} value={value}
+        onChange={e => onChange(e.target.value)} style={{ textAlign: 'right' }} />
+    </div>
+  );
+
   const { closing, close } = useModalAnimation(onClose);
   return (
     <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
-      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Settings size={16} color="#93c5fd" /> Configurações do Bot
             </h3>
-            <p>{bot.name} · {setting ? 'Editar configuração existente' : 'Criar configuração'}</p>
+            <p>{bot.name} · {setting ? 'Editar configuração' : 'Criar configuração'}</p>
           </div>
           <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 10, color: '#475569' }}>
               <Loader2 size={20} className="spin" /> Carregando configuração…
             </div>
           ) : (
             <>
-              {errors._api && (
+              {apiError && (
                 <div className="api-error-box">
                   <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-                  <span>{errors._api}</span>
+                  <span>{apiError}</span>
                 </div>
               )}
 
-              {/* Phone Number ID */}
-              <div className="form-field">
-                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Phone size={12} /> Phone Number ID
-                  <span className="form-hint" style={{ marginLeft: 4 }}>opcional · max 32</span>
-                </label>
-                <input
-                  className="form-input"
-                  placeholder="Ex: 123456789012345"
-                  value={form.phoneNumberId}
-                  onChange={e => setF('phoneNumberId', e.target.value)}
-                  maxLength={32}
-                />
+              {/* ── Seção Meta / WhatsApp ── */}
+              <div className="setting-section">
+                <div className="setting-section-title">
+                  <Phone size={13} /> WhatsApp · Meta API
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Phone Number ID</label>
+                  <input className="form-input" placeholder="Ex: 835412666332233"
+                    value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)} />
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Verify Token</label>
+                  <input className="form-input" placeholder="Token de verificação do webhook"
+                    value={verifyToken} onChange={e => setVerifyToken(e.target.value)} />
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">
+                    Access Token
+                    <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
+                  </label>
+                  {setting && (
+                    <div className="warning-box" style={{ marginBottom: 8 }}>
+                      <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 11 }}>Token criptografado — não retorna na API. Deixe vazio para manter o valor atual.</span>
+                    </div>
+                  )}
+                  <input className="form-input" placeholder="EAAMjQ..." type="password"
+                    value={accessToken} onChange={e => setAccessToken(e.target.value)} />
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">API Version</label>
+                  <input className="form-input" placeholder="v23.0"
+                    value={apiVersion} onChange={e => setApiVersion(e.target.value)} />
+                </div>
               </div>
 
-              {/* Verify Token */}
-              <div className="form-field">
-                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <KeyRound size={12} /> Verify Token
-                  <span className="form-hint" style={{ marginLeft: 4 }}>opcional</span>
-                </label>
-                <input
-                  className="form-input"
-                  placeholder="Token de verificação do webhook"
-                  value={form.verifyToken}
-                  onChange={e => setF('verifyToken', e.target.value)}
-                />
-              </div>
+              {/* ── Seção Orchestrator ── */}
+              <div className="setting-section">
+                <div className="setting-section-title">
+                  <Settings size={13} /> Orchestrator
+                </div>
 
-              {/* Meta Settings */}
-              <div className="form-field">
-                <label className="form-label">
-                  Meta Settings
-                  <span className="form-hint" style={{ marginLeft: 4 }}>JSON · criptografado · opcional</span>
-                </label>
-                {setting && (
-                  <div className="warning-box" style={{ marginBottom: 8 }}>
-                    <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
-                    <span style={{ fontSize: 11 }}>Este campo é criptografado e não é retornado pela API. Preencha apenas se quiser <strong>atualizar</strong> o valor.</span>
-                  </div>
-                )}
-                <textarea
-                  className={`form-input form-textarea ${errors.metaSettings ? 'error' : ''}`}
-                  placeholder={'{\n  "token": "...",\n  "appId": "..."\n}'}
-                  value={form.metaSettings}
-                  onChange={e => setF('metaSettings', e.target.value)}
-                  rows={4}
-                  style={{ fontFamily: 'monospace', fontSize: 12 }}
-                />
-                {errors.metaSettings && <span className="form-error-msg">{errors.metaSettings}</span>}
-              </div>
-
-              {/* Orchestrator Settings */}
-              <div className="form-field">
-                <label className="form-label">
-                  Orchestrator Settings
-                  <span className="form-hint" style={{ marginLeft: 4 }}>JSON · opcional</span>
-                </label>
-                <textarea
-                  className={`form-input form-textarea ${errors.orchestratorSettings ? 'error' : ''}`}
-                  placeholder={'{\n  "model": "gpt-4o",\n  "temperature": 0.7\n}'}
-                  value={form.orchestratorSettings}
-                  onChange={e => setF('orchestratorSettings', e.target.value)}
-                  rows={5}
-                  style={{ fontFamily: 'monospace', fontSize: 12 }}
-                />
-                {errors.orchestratorSettings && <span className="form-error-msg">{errors.orchestratorSettings}</span>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {numInput('RAG · Máx. resultados', ragMaxResults, setRagMaxResults)}
+                  {numInput('RAG · Similaridade mín.', ragMinSimilarity, setRagMinSimilarity, '0–1', '0.01')}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {numInput('Limite de tokens', chatTokensLimit, setChatTokensLimit)}
+                  {numInput('Limite de mensagens', chatMessagesLimit, setChatMessagesLimit)}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {numInput('Ratio de resumo', summaryTriggerRatio, setSummaryTriggerRatio, '0–1', '0.01')}
+                  {numInput('Timeout (min)', conversationTimeoutMin, setConversationTimeoutMin)}
+                </div>
               </div>
             </>
           )}
