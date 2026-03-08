@@ -390,6 +390,8 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
   const [verifyToken,   setVerifyToken]   = useState('');
   const [accessToken,   setAccessToken]   = useState('');
   const [apiVersion,    setApiVersion]    = useState('v23.0');
+  const [botApiUrl,     setBotApiUrl]     = useState('');
+  const [botApiKey,     setBotApiKey]     = useState('');
 
   // ── Orchestrator ──────────────────────────────────
   const [ragMaxResults,           setRagMaxResults]           = useState('9');
@@ -435,6 +437,8 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
         access_token:    accessToken.trim(),
         phone_number_id: phone,
         api_version:     apiVersion.trim() || 'v23.0',
+        bot_api_url:     botApiUrl.trim()  || null,
+        bot_api_key:     botApiKey.trim()  || null,
       } : null;
 
       const body = {
@@ -539,6 +543,21 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                   <label className="form-label">API Version</label>
                   <input className="form-input" placeholder="v23.0"
                     value={apiVersion} onChange={e => setApiVersion(e.target.value)} />
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Bot API URL</label>
+                  <input className="form-input" placeholder="https://api.exemplo.com/bot"
+                    value={botApiUrl} onChange={e => setBotApiUrl(e.target.value)} />
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">
+                    Bot API Key
+                    <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
+                  </label>
+                  <input className="form-input" placeholder="sk-..." type="password"
+                    value={botApiKey} onChange={e => setBotApiKey(e.target.value)} />
                 </div>
               </div>
 
