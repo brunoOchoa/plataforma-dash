@@ -441,12 +441,10 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
     setSaving(true);
     try {
       let meta_settings: Record<string, unknown> | null = null;
-      let phone: string | null = null;
-      let token: string | null = null;
+      const phone = phoneNumberId.trim() || null;
+      const token = verifyToken.trim()   || null;
 
       if (metaMode === 'whatsapp') {
-        phone = phoneNumberId.trim() || null;
-        token = verifyToken.trim()   || null;
         // só envia meta_settings se access_token preenchido (campo criptografado)
         if (accessToken.trim()) {
           meta_settings = {
