@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, RefreshCw,
   X, Check, AlertTriangle,
   Bot as BotIcon, FolderOpen, Building2, ChevronRight as Arrow,
-  BookOpen, Settings, Phone, KeyRound, Loader2,
+  BookOpen, Settings, Phone, KeyRound, Loader2, Globe,
 } from 'lucide-react';
 import { botService }           from '../services/botService';
 import { botSettingService }    from '../services/botSettingService';
@@ -379,19 +379,26 @@ function BotModal({ bot, allDepartments, defaultDeptId, defaultCompanyId, defaul
 /* ══════════════════════════════════════
    BOT SETTING MODAL
 ══════════════════════════════════════ */
+type MetaMode = 'whatsapp' | 'botapi';
+
 function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [setting, setSetting] = useState<BotSettingResponse | null>(null);
   const [apiError, setApiError] = useState('');
 
-  // ── Meta (WhatsApp/Meta API) ──────────────────────
+  // ── Modo de integração ─────────────────────────────
+  const [metaMode, setMetaMode] = useState<MetaMode>('whatsapp');
+
+  // ── WhatsApp / Meta API ────────────────────────────
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [verifyToken,   setVerifyToken]   = useState('');
   const [accessToken,   setAccessToken]   = useState('');
   const [apiVersion,    setApiVersion]    = useState('v23.0');
-  const [botApiUrl,     setBotApiUrl]     = useState('');
-  const [botApiKey,     setBotApiKey]     = useState('');
+
+  // ── Bot API ────────────────────────────────────────
+  const [botApiUrl, setBotApiUrl] = useState('');
+  const [botApiKey, setBotApiKey] = useState('');
 
   // ── Orchestrator ──────────────────────────────────
   const [ragMaxResults,           setRagMaxResults]           = useState('9');
@@ -406,9 +413,15 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
     botSettingService.getByBotId(bot.id)
       .then(s => {
         setSetting(s);
-        setPhoneNumberId(s.phoneNumberId ?? '');
+        // Detecta modo pelo phoneNumberId salvo
+        if (s.phoneNumberId) {
+          setMetaMode('whatsapp');
+          setPhoneNumberId(s.phoneNumberId);
+        } else {
+          setMetaMode('botapi');
+        }
         setVerifyToken(s.verifyToken ?? '');
-        // meta_settings é criptografado — não retorna; access_token e apiVersion ficam em branco
+        // meta_settings é criptografado — não retorna na API
         const o = s.orchestratorSettings as Record<string, unknown> | null;
         if (o) {
           if (o.rag_max_results          != null) setRagMaxResults(String(o.rag_max_results));
@@ -427,19 +440,31 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
     setApiError('');
     setSaving(true);
     try {
-      const phone = phoneNumberId.trim() || null;
-      const token = verifyToken.trim()   || null;
+      let meta_settings: Record<string, unknown> | null = null;
+      let phone: string | null = null;
+      let token: string | null = null;
 
-      // meta_settings: só envia se access_token preenchido (criptografado, não volta na response)
-      const hasMetaData = accessToken.trim().length > 0;
-      const meta_settings = hasMetaData ? {
-        verify_token:    token,
-        access_token:    accessToken.trim(),
-        phone_number_id: phone,
-        api_version:     apiVersion.trim() || 'v23.0',
-        bot_api_url:     botApiUrl.trim()  || null,
-        bot_api_key:     botApiKey.trim()  || null,
-      } : null;
+      if (metaMode === 'whatsapp') {
+        phone = phoneNumberId.trim() || null;
+        token = verifyToken.trim()   || null;
+        // só envia meta_settings se access_token preenchido (campo criptografado)
+        if (accessToken.trim()) {
+          meta_settings = {
+            access_token:    accessToken.trim(),
+            verify_token:    token,
+            phone_number_id: phone,
+            api_version:     apiVersion.trim() || 'v23.0',
+          };
+        }
+      } else {
+        // botapi — envia apenas url e key
+        if (botApiUrl.trim() || botApiKey.trim()) {
+          meta_settings = {
+            bot_api_url: botApiUrl.trim() || null,
+            bot_api_key: botApiKey.trim() || null,
+          };
+        }
+      }
 
       const body = {
         bot_id:          bot.id,
@@ -506,7 +531,7 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                 </div>
               )}
 
-              {/* ── Seção Meta / WhatsApp ── */}
+              {/* ── Seção WhatsApp / Meta ── */}
               <div className="setting-section">
                 <div className="setting-section-title">
                   <Phone size={13} /> WhatsApp · Meta API
@@ -524,41 +549,81 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                     value={verifyToken} onChange={e => setVerifyToken(e.target.value)} />
                 </div>
 
-                <div className="form-field">
-                  <label className="form-label">
-                    Access Token
-                    <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
-                  </label>
-                  {setting && (
-                    <div className="warning-box" style={{ marginBottom: 8 }}>
-                      <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: 11 }}>Token criptografado — não retorna na API. Deixe vazio para manter o valor atual.</span>
+                {/* Toggle acesso */}
+                <div style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.6)', marginBottom: 14, gap: 0 }}>
+                  {(['whatsapp', 'botapi'] as MetaMode[]).map((mode, i) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setMetaMode(mode)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        padding: '6px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 12, fontWeight: 500,
+                        color: metaMode === mode ? '#93c5fd' : '#475569',
+                        borderBottom: metaMode === mode ? '2px solid #3b82f6' : '2px solid transparent',
+                        marginBottom: -1,
+                        borderRadius: i === 0 ? '4px 0 0 0' : '0 4px 0 0',
+                        transition: 'color 0.15s',
+                      }}
+                    >
+                      {mode === 'whatsapp' ? <KeyRound size={12} /> : <Globe size={12} />}
+                      {mode === 'whatsapp' ? 'Access Token' : 'Bot API'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Campos Access Token ── */}
+                {metaMode === 'whatsapp' && (
+                  <>
+                    <div className="form-field">
+                      <label className="form-label">
+                        Access Token
+                        <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
+                      </label>
+                      {setting && (
+                        <div className="warning-box" style={{ marginBottom: 8 }}>
+                          <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: 11 }}>Token criptografado — não retorna na API. Deixe vazio para manter o valor atual.</span>
+                        </div>
+                      )}
+                      <input className="form-input" placeholder="EAAMjQ..." type="password"
+                        value={accessToken} onChange={e => setAccessToken(e.target.value)} />
                     </div>
-                  )}
-                  <input className="form-input" placeholder="EAAMjQ..." type="password"
-                    value={accessToken} onChange={e => setAccessToken(e.target.value)} />
-                </div>
 
-                <div className="form-field">
-                  <label className="form-label">API Version</label>
-                  <input className="form-input" placeholder="v23.0"
-                    value={apiVersion} onChange={e => setApiVersion(e.target.value)} />
-                </div>
+                    <div className="form-field">
+                      <label className="form-label">API Version</label>
+                      <input className="form-input" placeholder="v23.0"
+                        value={apiVersion} onChange={e => setApiVersion(e.target.value)} />
+                    </div>
+                  </>
+                )}
 
-                <div className="form-field">
-                  <label className="form-label">Bot API URL</label>
-                  <input className="form-input" placeholder="https://api.exemplo.com/bot"
-                    value={botApiUrl} onChange={e => setBotApiUrl(e.target.value)} />
-                </div>
+                {/* ── Campos Bot API ── */}
+                {metaMode === 'botapi' && (
+                  <>
+                    <div className="form-field">
+                      <label className="form-label">Bot API URL</label>
+                      <input className="form-input" placeholder="https://api.exemplo.com/bot"
+                        value={botApiUrl} onChange={e => setBotApiUrl(e.target.value)} />
+                    </div>
 
-                <div className="form-field">
-                  <label className="form-label">
-                    Bot API Key
-                    <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
-                  </label>
-                  <input className="form-input" placeholder="sk-..." type="password"
-                    value={botApiKey} onChange={e => setBotApiKey(e.target.value)} />
-                </div>
+                    <div className="form-field">
+                      <label className="form-label">
+                        Bot API Key
+                        <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
+                      </label>
+                      {setting && (
+                        <div className="warning-box" style={{ marginBottom: 8 }}>
+                          <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: 11 }}>Key criptografada — não retorna na API. Deixe vazio para manter o valor atual.</span>
+                        </div>
+                      )}
+                      <input className="form-input" placeholder="sk-..." type="password"
+                        value={botApiKey} onChange={e => setBotApiKey(e.target.value)} />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* ── Seção Orchestrator ── */}
