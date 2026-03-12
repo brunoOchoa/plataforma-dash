@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { companyService } from '../services/companyService';
 
 export interface SelectedCompany {
@@ -11,6 +11,9 @@ interface CompanyContextType {
   setSelectedCompany: (c: SelectedCompany | null) => void;
   companies: SelectedCompany[];   // lista completa para o selector (vazia para clientes)
   isCustomer: boolean;            // true → empresa fixa, sem troca
+  companiesLoading: boolean;
+  companiesError: boolean;
+  reloadCompanies: () => void;
 }
 
 const CompanyContext = createContext<CompanyContextType | null>(null);
@@ -41,7 +44,9 @@ export function CompanyProvider({ children, customerCompany }: CompanyProviderPr
   const [selectedCompany, _setSelected] = useState<SelectedCompany | null>(
     isCustomer ? customerCompany : loadFromStorage
   );
-  const [companies, setCompanies] = useState<SelectedCompany[]>([]);
+  const [companies,        setCompanies]        = useState<SelectedCompany[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(!isCustomer);
+  const [companiesError,   setCompaniesError]   = useState(false);
 
   // Atualiza se o customerCompany mudar (ex: refresh da página com novo token)
   useEffect(() => {
@@ -50,13 +55,21 @@ export function CompanyProvider({ children, customerCompany }: CompanyProviderPr
     }
   }, [isCustomer, customerCompany?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Carrega lista de empresas UMA única vez — somente para usuários sistema
-  useEffect(() => {
-    if (isCustomer) return; // cliente não tem acesso ao /company
+  const fetchCompanies = useCallback(() => {
+    if (isCustomer) return;
+    setCompaniesLoading(true);
+    setCompaniesError(false);
     companyService.list({ size: 100, active: true })
-      .then(r => setCompanies(r.content.map(c => ({ id: c.id, name: c.name }))))
-      .catch(() => {});
+      .then(r => {
+        setCompanies(r.content.map(c => ({ id: c.id, name: c.name })));
+        setCompaniesError(false);
+      })
+      .catch(() => setCompaniesError(true))
+      .finally(() => setCompaniesLoading(false));
   }, [isCustomer]);
+
+  // Carrega lista de empresas ao montar — somente para usuários sistema
+  useEffect(() => { fetchCompanies(); }, [fetchCompanies]);
 
   const setSelectedCompany = (c: SelectedCompany | null) => {
     if (isCustomer) return; // empresa fixa — não permite troca
@@ -69,7 +82,12 @@ export function CompanyProvider({ children, customerCompany }: CompanyProviderPr
   };
 
   return (
-    <CompanyContext.Provider value={{ selectedCompany, setSelectedCompany, companies, isCustomer }}>
+    <CompanyContext.Provider value={{
+      selectedCompany, setSelectedCompany,
+      companies, isCustomer,
+      companiesLoading, companiesError,
+      reloadCompanies: fetchCompanies,
+    }}>
       {children}
     </CompanyContext.Provider>
   );

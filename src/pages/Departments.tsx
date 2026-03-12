@@ -31,12 +31,10 @@ function useToast() {
 /* ══════════════════════════════════════
    HELPERS
 ══════════════════════════════════════ */
-/* storage_quotas vem em KB */
-function formatKb(kb: number | null) {
-  if (!kb) return '—';
-  if (kb >= 1_048_576) return `${(kb / 1_048_576).toFixed(1)} GB`;
-  if (kb >= 1_024)     return `${(kb / 1_024).toFixed(1)} MB`;
-  return `${kb} KB`;
+/* storage_quotas é armazenado em GB diretamente no banco (igual a Company) */
+function formatGb(gb: number | null) {
+  if (!gb) return '—';
+  return `${gb} GB`;
 }
 
 function deptInitials(name: string) {
@@ -59,10 +57,10 @@ interface DepartmentModalProps {
 function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName, isCustomer, onClose, onSave }: DepartmentModalProps) {
   const isEdit = !!dept;
 
-  /* storage_quotas vem em KB — mostramos em MB para o usuário */
+  /* storage_quotas em GB (mesma unidade da Company) */
   const [form, setForm] = useState({
     name:      dept?.name         ?? '',
-    storageMb: dept?.storageQuotas != null ? String(Math.round(dept.storageQuotas / 1024)) : '',
+    storageGb: dept?.storageQuotas != null ? String(dept.storageQuotas) : '',
     active:    dept?.active       ?? true,
     companyId: dept?.company?.id  ?? defaultCompanyId ?? (companies[0]?.id ?? ''),
   });
@@ -77,7 +75,7 @@ function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName
     else if (form.name.trim().length < 3)  e.name = 'Mínimo 3 caracteres';
     else if (form.name.trim().length > 60) e.name = 'Máximo 60 caracteres';
     if (!form.companyId) e.companyId = 'Selecione uma empresa';
-    if (form.storageMb && isNaN(Number(form.storageMb))) e.storageMb = 'Valor inválido';
+    if (form.storageGb && isNaN(Number(form.storageGb))) e.storageGb = 'Valor inválido';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -86,13 +84,13 @@ function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName
     if (!validate()) return;
     setSaving(true);
     try {
-      /* usuário digita MB → API espera KB */
-      const quotaKb = form.storageMb ? Math.round(Number(form.storageMb) * 1024) : null;
+      /* usuário digita GB → API espera GB (mesma unidade da Company) */
+      const quotaGb = form.storageGb ? Number(form.storageGb) : null;
 
       if (isEdit) {
         const body: UpdateDepartmentRequest = {
           name:           form.name.trim(),
-          storage_quotas: quotaKb,
+          storage_quotas: quotaGb,
           active:         form.active,
           company_id:     form.companyId,
         };
@@ -100,7 +98,7 @@ function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName
       } else {
         const body: CreateDepartmentRequest = {
           name:           form.name.trim(),
-          storage_quotas: quotaKb,
+          storage_quotas: quotaGb,
           company_id:     form.companyId,
         };
         await onSave(body);
@@ -172,17 +170,17 @@ function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName
             </div>
 
             <div className="form-field">
-              <label className="form-label">Cota de Storage (MB) <span className="form-hint" style={{ marginLeft: 4 }}>opcional</span></label>
+              <label className="form-label">Cota de Storage (GB) <span className="form-hint" style={{ marginLeft: 4 }}>opcional</span></label>
               <input
-                className={`form-input ${errors.storageMb ? 'error' : ''}`}
-                placeholder="Ex: 512 (= 512 MB)"
+                className={`form-input ${errors.storageGb ? 'error' : ''}`}
+                placeholder="Ex: 5 (= 5 GB)"
                 type="number"
                 min="0"
                 step="1"
-                value={form.storageMb}
-                onChange={e => set('storageMb', e.target.value)}
+                value={form.storageGb}
+                onChange={e => set('storageGb', e.target.value)}
               />
-              {errors.storageMb && <span className="form-error-msg">{errors.storageMb}</span>}
+              {errors.storageGb && <span className="form-error-msg">{errors.storageGb}</span>}
               <span className="form-hint">Deixe vazio para sem limite</span>
             </div>
 
@@ -419,11 +417,11 @@ export default function Departments() {
                           <span style={{ fontSize: 13, color: '#94a3b8' }}>{d.company?.name ?? '—'}</span>
                         </div>
                       </td>
-                      {/* storage_quotas em KB */}
+                      {/* storage_quotas em GB */}
                       <td data-label="Storage">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Database size={12} color="#475569" />
-                          <span style={{ fontSize: 13, color: '#94a3b8' }}>{formatKb(d.storageQuotas)}</span>
+                          <span style={{ fontSize: 13, color: '#94a3b8' }}>{formatGb(d.storageQuotas)}</span>
                         </div>
                       </td>
                       <td data-label="Status">

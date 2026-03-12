@@ -29,7 +29,7 @@ function NavItem({ icon: Icon, label, active, onClick }: {
 
 /* ── CompanySelector — dropdown customizado para usuários HITSS ── */
 function CompanySelector() {
-  const { selectedCompany, setSelectedCompany, companies } = useCompany();
+  const { selectedCompany, setSelectedCompany, companies, companiesLoading, companiesError, reloadCompanies } = useCompany();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -79,8 +79,24 @@ function CompanySelector() {
             </div>
           ))}
 
-          {companies.length === 0 && (
+          {/* Estados: carregando / erro / vazio */}
+          {companiesLoading && (
             <div className="cs-empty">Carregando empresas…</div>
+          )}
+          {!companiesLoading && companiesError && (
+            <div className="cs-empty" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <span>Erro ao carregar</span>
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 11, padding: '3px 10px', height: 'auto' }}
+                onClick={e => { e.stopPropagation(); reloadCompanies(); }}
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+          {!companiesLoading && !companiesError && companies.length === 0 && (
+            <div className="cs-empty">Nenhuma empresa encontrada</div>
           )}
         </div>
       )}

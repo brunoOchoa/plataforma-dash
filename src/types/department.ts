@@ -15,8 +15,8 @@ export interface DepartmentCompany {
 export interface Department {
   id: string;
   name: string;
-  storageQuotas: number | null;           // KB
-  availableStorageQuotas?: number | null; // KB (@Transient, calculado)
+  storageQuotas: number | null;           // GB (mesma unidade de Company)
+  availableStorageQuotas?: number | null; // GB (@Transient, calculado)
   active: boolean;
   company?: DepartmentCompany;
   createdAt: string;
@@ -26,14 +26,14 @@ export interface Department {
 /* Requisições (front → API) — DepartmentRequest usa @JsonProperty snake_case */
 export interface CreateDepartmentRequest {
   name: string;
-  storage_quotas?: number | null;  // KB
+  storage_quotas?: number | null;  // GB
   active?: boolean;
   company_id: string;
 }
 
 export interface UpdateDepartmentRequest {
   name: string;
-  storage_quotas: number | null;   // KB
+  storage_quotas: number | null;   // GB
   active: boolean;
   company_id: string;
 }
