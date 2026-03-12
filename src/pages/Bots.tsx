@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -7,15 +7,18 @@ import {
   X, Check, AlertTriangle,
   Bot as BotIcon, FolderOpen, Building2, ChevronRight as Arrow,
   BookOpen, Settings, Phone, KeyRound, Loader2, Globe,
+  FileText, RotateCcw, ChevronDown,
 } from 'lucide-react';
 import { botService }           from '../services/botService';
 import { botSettingService }    from '../services/botSettingService';
 import { departmentService }    from '../services/departmentService';
 import { knowledgebaseService } from '../services/knowledgebaseService';
+import { promptService }        from '../services/promptService';
 import type { Bot, CreateBotRequest, UpdateBotRequest } from '../types/bot';
 import type { BotSettingResponse } from '../types/botSetting';
 import type { Department }     from '../types/department';
 import type { KnowledgeBase }  from '../types/knowledgebase';
+import type { Prompt, PromptType, CreatePromptRequest } from '../types/prompt';
 import AppShell from '../components/AppShell';
 import { useCompany } from '../context/CompanyContext';
 import { useModalAnimation } from '../hooks/useModalAnimation';
@@ -377,6 +380,230 @@ function BotModal({ bot, allDepartments, defaultDeptId, defaultCompanyId, defaul
 }
 
 /* ══════════════════════════════════════
+   PROMPT HELPERS
+══════════════════════════════════════ */
+const PROMPT_TYPE_LABELS: Record<PromptType, string> = {
+  CHAT_GERAL: 'Chat Geral',
+  RAG_GERAL:  'RAG Geral',
+};
+
+const thS: React.CSSProperties = {
+  padding: '6px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600,
+  color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em',
+  borderBottom: '1px solid rgba(51,65,85,0.4)', whiteSpace: 'nowrap',
+};
+const tdS: React.CSSProperties = {
+  padding: '7px 10px', verticalAlign: 'middle',
+};
+
+/* ── Modal: ver texto completo ── */
+function ViewTextModal({ prompt, onClose }: { prompt: Prompt; onClose: () => void }) {
+  const { closing, close } = useModalAnimation(onClose);
+  return (
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div
+        className={`modal modal-lg${closing ? ' modal-closing' : ''}`}
+        style={{ maxWidth: 660 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FileText size={15} color="#93c5fd" />
+              {PROMPT_TYPE_LABELS[prompt.type_prompt]}
+              <span style={{ fontSize: 12, color: '#475569', fontWeight: 400 }}>v{prompt.version}</span>
+            </h3>
+            <p>{prompt.description ?? 'Sem descrição'}</p>
+          </div>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
+        </div>
+        <div className="modal-body">
+          <pre style={{
+            margin: 0, padding: '14px 16px',
+            background: 'rgba(15,23,42,0.6)', borderRadius: 8,
+            border: '1px solid rgba(51,65,85,0.5)',
+            fontSize: 13, lineHeight: 1.7, color: '#e2e8f0',
+            fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            maxHeight: 460, overflowY: 'auto',
+          }}>
+            {prompt.prompt_text}
+          </pre>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={close}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Modal: criar prompt (bot fixo) ── */
+function BotPromptCreateModal({
+  bot, onClose, onSave,
+}: { bot: Bot; onClose: () => void; onSave: (b: CreatePromptRequest) => Promise<void> }) {
+  const [typePrompt,  setTypePrompt]  = useState<PromptType>('CHAT_GERAL');
+  const [description, setDescription] = useState('');
+  const [promptText,  setPromptText]  = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [errors,      setErrors]      = useState<Record<string, string>>({});
+
+  const handleSubmit = async () => {
+    const e: Record<string, string> = {};
+    if (!promptText.trim()) e.promptText = 'Texto do prompt é obrigatório';
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    setSaving(true);
+    try {
+      await onSave({
+        bot_id:      bot.id,
+        type_prompt: typePrompt,
+        description: description.trim() || null,
+        prompt_text: promptText.trim(),
+      });
+      onClose();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao salvar prompt';
+      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const { closing, close } = useModalAnimation(onClose);
+  return (
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div
+        className={`modal modal-lg${closing ? ' modal-closing' : ''}`}
+        style={{ maxWidth: 640 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h3>Novo Prompt</h3>
+            <p>{bot.name} · nova versão de prompt</p>
+          </div>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
+        </div>
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {errors._api && (
+            <div className="api-error-box">
+              <AlertTriangle size={14} style={{ flexShrink: 0 }} /><span>{errors._api}</span>
+            </div>
+          )}
+
+          <div className="form-field">
+            <label className="form-label">Tipo *</label>
+            <select className="form-select" value={typePrompt} onChange={e => setTypePrompt(e.target.value as PromptType)}>
+              <option value="CHAT_GERAL">Chat Geral</option>
+              <option value="RAG_GERAL">RAG Geral</option>
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label className="form-label">
+              Descrição<span className="form-hint" style={{ marginLeft: 4 }}>opcional</span>
+            </label>
+            <input
+              className="form-input"
+              placeholder="Ex: Atendimento ao cliente v3"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              maxLength={512}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label">Texto do Prompt *</label>
+            <textarea
+              className={`form-input${errors.promptText ? ' error' : ''}`}
+              placeholder="Você é um assistente de atendimento..."
+              value={promptText}
+              onChange={e => setPromptText(e.target.value)}
+              rows={10}
+              style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6 }}
+            />
+            {errors.promptText && <span className="form-error-msg">{errors.promptText}</span>}
+            <span className="form-hint">{promptText.length} caracteres</span>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={close} disabled={saving}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? <><span className="spinner-sm" /> Salvando…</> : <><Check size={14} /> Criar Prompt</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Painel de prompts expandido ── */
+function BotPromptsPanel({ bot }: { bot: Bot }) {
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    promptService.list({ botId: bot.id, size: 50 })
+      .then(r => setPrompts(r.content.filter(p => p.active)))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [bot.id]);
+
+  return (
+    <div style={{
+      padding: '16px 24px 18px',
+      background: 'var(--bg-card)',
+      borderTop: '2px solid #3b82f6',
+      borderBottom: '1px solid var(--border-subtle)',
+      boxShadow: 'inset 0 2px 8px rgba(59,130,246,0.06)',
+    }}>
+      <p style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+        Prompts Ativos
+      </p>
+      {loading ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+          <Loader2 size={13} className="spin" /> Carregando…
+        </div>
+      ) : prompts.length === 0 ? (
+        <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Nenhum prompt ativo para este bot.</span>
+      ) : (
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          {prompts.map(p => (
+            <div key={p.id} style={{
+              flex: 1, minWidth: 260,
+              background: 'var(--bg-body)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 8,
+              padding: '10px 14px',
+            }}>
+              <span style={{
+                display: 'inline-block', marginBottom: 8, padding: '2px 8px', borderRadius: 4,
+                fontSize: 11, fontWeight: 600,
+                background: p.type_prompt === 'CHAT_GERAL' ? 'rgba(99,102,241,0.15)' : 'rgba(16,185,129,0.12)',
+                color:      p.type_prompt === 'CHAT_GERAL' ? '#818cf8'              : '#34d399',
+              }}>
+                {PROMPT_TYPE_LABELS[p.type_prompt]}
+              </span>
+              <pre style={{
+                margin: 0, padding: 0,
+                background: 'transparent',
+                fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
+                fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                maxHeight: 100, overflowY: 'auto',
+              }}>
+                {p.prompt_text}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
    BOT SETTING MODAL
 ══════════════════════════════════════ */
 type MetaMode = 'whatsapp' | 'botapi';
@@ -716,6 +943,7 @@ export default function Bots() {
   const [editing,        setEditing]        = useState<Bot | null>(null);
   const [deleting,       setDeleting]       = useState<Bot | null>(null);
   const [settingBot,     setSettingBot]     = useState<Bot | null>(null);
+  const [expandedBotId,  setExpandedBotId]  = useState<string | null>(null);
 
   const { toasts, push } = useToast();
 
@@ -877,52 +1105,74 @@ export default function Bots() {
                       </div>
                     </td></tr>
                   ) : bots.map(b => (
-                    <tr key={b.id}>
-                      <td>
-                        <div className="user-name-cell">
-                          <div className="bot-avatar-sm">{botInitials(b.name)}</div>
-                          <div>
-                            <div className="user-name">{b.name}</div>
-                            <div className="user-email">
-                              {new Date(b.createdAt.replace(/(\.\d{3})\d+/, '$1')).toLocaleDateString('pt-BR')}
+                    <Fragment key={b.id}>
+                      <tr style={{ borderBottom: expandedBotId === b.id ? 'none' : undefined }}>
+                        <td>
+                          <div className="user-name-cell">
+                            <div className="bot-avatar-sm">{botInitials(b.name)}</div>
+                            <div>
+                              <div className="user-name">{b.name}</div>
+                              <div className="user-email">
+                                {new Date(b.createdAt.replace(/(\.\d{3})\d+/, '$1')).toLocaleDateString('pt-BR')}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td data-label="Departamento">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <FolderOpen size={12} color="#475569" />
-                          <span style={{ fontSize: 13, color: '#94a3b8' }}>{b.department?.name ?? '—'}</span>
-                        </div>
-                      </td>
-                      <td data-label="Empresa">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Building2 size={12} color="#475569" />
-                          <span style={{ fontSize: 13, color: '#94a3b8' }}>{b.department?.company?.name ?? '—'}</span>
-                        </div>
-                      </td>
-                      <td data-label="Bases">
-                        <KbsCell kbs={b.knowledgeBases ?? []} />
-                      </td>
-                      <td data-label="Status">
-                        <span className={`pill ${b.active ? 'pill-green' : 'pill-gray'}`}>
-                          {b.active ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="actions-cell">
-                          <button className="btn btn-ghost btn-icon" title="Configurações" onClick={() => setSettingBot(b)}>
-                            <Settings size={14} />
-                          </button>
-                          <button className="btn btn-ghost btn-icon" title="Editar" onClick={() => setEditing(b)}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className="btn btn-danger-ghost btn-icon" title="Desativar" onClick={() => setDeleting(b)}>
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td data-label="Departamento">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <FolderOpen size={12} color="#475569" />
+                            <span style={{ fontSize: 13, color: '#94a3b8' }}>{b.department?.name ?? '—'}</span>
+                          </div>
+                        </td>
+                        <td data-label="Empresa">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Building2 size={12} color="#475569" />
+                            <span style={{ fontSize: 13, color: '#94a3b8' }}>{b.department?.company?.name ?? '—'}</span>
+                          </div>
+                        </td>
+                        <td data-label="Bases">
+                          <KbsCell kbs={b.knowledgeBases ?? []} />
+                        </td>
+                        <td data-label="Status">
+                          <span className={`pill ${b.active ? 'pill-green' : 'pill-gray'}`}>
+                            {b.active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="actions-cell">
+                            <button
+                              className="btn btn-ghost btn-icon"
+                              title="Prompts"
+                              onClick={() => setExpandedBotId(id => id === b.id ? null : b.id)}
+                              style={{ color: expandedBotId === b.id ? '#93c5fd' : undefined }}
+                            >
+                              <FileText size={14} />
+                              <ChevronDown size={10} style={{
+                                marginLeft: -2,
+                                transform: expandedBotId === b.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.2s',
+                              }} />
+                            </button>
+                            <button className="btn btn-ghost btn-icon" title="Configurações" onClick={() => setSettingBot(b)}>
+                              <Settings size={14} />
+                            </button>
+                            <button className="btn btn-ghost btn-icon" title="Editar" onClick={() => setEditing(b)}>
+                              <Pencil size={14} />
+                            </button>
+                            <button className="btn btn-danger-ghost btn-icon" title="Desativar" onClick={() => setDeleting(b)}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedBotId === b.id && (
+                        <tr>
+                          <td colSpan={6} style={{ padding: 0 }}>
+                            <BotPromptsPanel bot={b} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

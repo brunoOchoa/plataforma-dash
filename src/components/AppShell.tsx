@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, Bot, Shield, Settings,
-  LogOut, Bell, X, Zap, ChevronRight, ChevronDown, Menu, FolderOpen, BookOpen,
+  LogOut, Bell, X, Zap, ChevronRight, ChevronDown, Menu, FolderOpen, BookOpen, FileText,
   Sun, Moon, Check,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -139,6 +139,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     path.startsWith('/knowledge-bases')  ? 'Base de Conhecimento' :
     path.startsWith('/permissions')      ? 'Permissões' :
     path.startsWith('/bots')             ? 'Bots'     :
+    path.startsWith('/prompts')          ? 'Prompts'  :
     path.startsWith('/settings')         ? 'Configurações' :
     'Dashboard';
 
@@ -233,6 +234,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             label="Bots"
             active={path.startsWith('/bots')}
             onClick={() => navTo('/bots')}
+          />
+          <NavItem
+            icon={FileText}
+            label="Prompts"
+            active={path.startsWith('/prompts')}
+            onClick={() => navTo('/prompts')}
           />
 
           <p className="nav-section-label">Sistema</p>
