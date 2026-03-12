@@ -13,5 +13,5 @@ export const systemRoleService = {
    ─────────────────────────────────────────────────────────────────────────────── */
 export const customerRoleService = {
   list: () =>
-    api.get<Role[]>('/system/customer-role').then(r => r.data),
+    api.get<Role[]>('/customer/role').then(r => r.data),
 };
