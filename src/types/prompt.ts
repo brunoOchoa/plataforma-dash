@@ -2,7 +2,7 @@ export type PromptType = 'CHAT_GERAL' | 'RAG_GERAL';
 
 export interface Prompt {
   id: string;
-  bot_id: string;
+  agent_id: string;
   description: string | null;
   prompt_text: string;
   type_prompt: PromptType;
@@ -23,7 +23,7 @@ export interface PromptPage {
 }
 
 export interface CreatePromptRequest {
-  bot_id: string;
+  agent_id: string;
   type_prompt: PromptType;
   description?: string | null;
   prompt_text: string;

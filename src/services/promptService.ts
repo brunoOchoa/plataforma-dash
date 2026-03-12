@@ -2,7 +2,7 @@ import api from './api';
 import type { Prompt, PromptPage, PromptType, CreatePromptRequest } from '../types/prompt';
 
 export const promptService = {
-  list: (params?: { botId?: string; typePrompt?: PromptType; page?: number; size?: number }) =>
+  list: (params?: { agentId?: string; typePrompt?: PromptType; page?: number; size?: number }) =>
     api.get<PromptPage>('/prompt', { params: { size: 15, ...params } }).then(r => r.data),
 
   getById: (id: string) =>

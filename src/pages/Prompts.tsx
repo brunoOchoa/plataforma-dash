@@ -68,7 +68,7 @@ function PromptModal({ bots, defaultBotId, onClose, onSave }: PromptModalProps) 
     setSaving(true);
     try {
       await onSave({
-        bot_id:      botId,
+        agent_id:    botId,
         type_prompt: typePrompt,
         description: description.trim() || null,
         prompt_text: promptText.trim(),
@@ -262,7 +262,7 @@ export default function Prompts() {
     setLoading(true);
     try {
       const params: Record<string, any> = { page, size: 15 };
-      if (selBot)  params.botId      = selBot;
+      if (selBot)  params.agentId    = selBot;
       if (selType) params.typePrompt = selType;
       const r = await promptService.list(params);
       setPrompts(r.content);
@@ -416,7 +416,7 @@ export default function Prompts() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <BotIcon size={12} color="#475569" />
                           <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                            {bots.find(b => b.id === p.bot_id)?.name ?? p.bot_id.slice(0, 8) + '…'}
+                            {bots.find(b => b.id === p.agent_id)?.name ?? p.agent_id.slice(0, 8) + '…'}
                           </span>
                         </div>
                       </td>

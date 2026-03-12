@@ -2,9 +2,9 @@ import api from './api';
 import type { BotSettingRequest, BotSettingResponse } from '../types/botSetting';
 
 export const botSettingService = {
-  /** GET /api/v1/agent-settings/{botId} — busca pelo ID do bot (não do setting) */
-  getByBotId: (botId: string) =>
-    api.get<BotSettingResponse>(`/agent-settings/${botId}`).then(r => r.data),
+  /** GET /api/v1/agent-settings/{agentId} — busca pelo ID do agent (não do setting) */
+  getByBotId: (agentId: string) =>
+    api.get<BotSettingResponse>(`/agent-settings/${agentId}`).then(r => r.data),
 
   /** POST /api/v1/agent-settings */
   create: (body: BotSettingRequest) =>

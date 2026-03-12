@@ -455,7 +455,7 @@ function BotPromptCreateModal({
     setSaving(true);
     try {
       await onSave({
-        bot_id:      bot.id,
+        agent_id:    bot.id,
         type_prompt: typePrompt,
         description: description.trim() || null,
         prompt_text: promptText.trim(),
@@ -545,7 +545,7 @@ function BotPromptsPanel({ bot }: { bot: Bot }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    promptService.list({ botId: bot.id, size: 50 })
+    promptService.list({ agentId: bot.id, size: 50 })
       .then(r => setPrompts(r.content.filter(p => p.active)))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -692,7 +692,7 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
       }
 
       const body = {
-        bot_id:          bot.id,
+        agent_id:        bot.id,
         phone_number_id: phone,
         verify_token:    token,
         meta_settings,
