@@ -623,9 +623,9 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
   const [accessToken,   setAccessToken]   = useState('');
   const [apiVersion,    setApiVersion]    = useState('v23.0');
 
-  // ── Bot API ────────────────────────────────────────
-  const [botApiUrl, setBotApiUrl] = useState('');
-  const [botApiKey, setBotApiKey] = useState('');
+  // ── Agent API ─────────────────────────────────────
+  const [agentApiUrl, setAgentApiUrl] = useState('');
+  const [agentApiKey, setAgentApiKey] = useState('');
 
   // ── Orchestrator ──────────────────────────────────
   const [ragMaxResults,           setRagMaxResults]           = useState('9');
@@ -682,11 +682,11 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
           };
         }
       } else {
-        // botapi — envia apenas url e key
-        if (botApiUrl.trim() || botApiKey.trim()) {
+        // agentapi — envia apenas url e key
+        if (agentApiUrl.trim() || agentApiKey.trim()) {
           meta_settings = {
-            bot_api_url: botApiUrl.trim() || null,
-            bot_api_key: botApiKey.trim() || null,
+            agent_api_url: agentApiUrl.trim() || null,
+            agent_api_key: agentApiKey.trim() || null,
           };
         }
       }
@@ -793,7 +793,7 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                       }}
                     >
                       {mode === 'whatsapp' ? <KeyRound size={12} /> : <Globe size={12} />}
-                      {mode === 'whatsapp' ? 'Access Token' : 'Bot API'}
+                      {mode === 'whatsapp' ? 'Access Token' : 'Agent API'}
                     </button>
                   ))}
                 </div>
@@ -824,18 +824,18 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                   </>
                 )}
 
-                {/* ── Campos Bot API ── */}
+                {/* ── Campos Agent API ── */}
                 {metaMode === 'botapi' && (
                   <>
                     <div className="form-field">
-                      <label className="form-label">Bot API URL</label>
-                      <input className="form-input" placeholder="https://api.exemplo.com/bot"
-                        value={botApiUrl} onChange={e => setBotApiUrl(e.target.value)} />
+                      <label className="form-label">Agent API URL</label>
+                      <input className="form-input" placeholder="https://api.exemplo.com/agent"
+                        value={agentApiUrl} onChange={e => setAgentApiUrl(e.target.value)} />
                     </div>
 
                     <div className="form-field">
                       <label className="form-label">
-                        Bot API Key
+                        Agent API Key
                         <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
                       </label>
                       {setting && (
@@ -845,7 +845,7 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                         </div>
                       )}
                       <input className="form-input" placeholder="sk-..." type="password"
-                        value={botApiKey} onChange={e => setBotApiKey(e.target.value)} />
+                        value={agentApiKey} onChange={e => setAgentApiKey(e.target.value)} />
                     </div>
                   </>
                 )}
