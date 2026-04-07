@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, Bot, Shield, Settings,
   LogOut, Bell, X, Zap, ChevronRight, ChevronDown, Menu, FolderOpen, BookOpen, FileText,
-  Sun, Moon, Check,
+  Sun, Moon, Check, MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCompany } from '../context/CompanyContext';
@@ -256,6 +256,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             label="Prompts"
             active={path.startsWith('/prompts')}
             onClick={() => navTo('/prompts')}
+          />
+          <NavItem
+            icon={MessageCircle}
+            label="Chat"
+            active={path.startsWith('/chat')}
+            onClick={() => navTo('/chat')}
           />
 
           <p className="nav-section-label">Sistema</p>
