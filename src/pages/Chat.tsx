@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { chatService } from '../services/chatService';
 import { botService }  from '../services/botService';
-import type { ChatSession, ChatMessage, SessionStatus } from '../types/chat';
+import type { ChatSession, ChatMessage, SessionStatus, Channel } from '../types/chat';
 import type { Bot as BotType } from '../types/bot';
 import type { Page } from '../types/user';
 import AppShell from '../components/AppShell';
@@ -36,6 +36,17 @@ const STATUS_PILL: Record<SessionStatus, string> = {
   CLOSED:    'pill-gray',
   ABANDONED: 'pill-amber',
   EXPIRED:   'pill-red',
+};
+
+const CHANNEL_LABELS: Record<Channel, string> = {
+  WHATSAPP: 'WhatsApp',
+  TEAMS:    'Teams',
+  WEB:      'Web',
+};
+const CHANNEL_COLOR: Record<Channel, string> = {
+  WHATSAPP: '#25d366',
+  TEAMS:    '#6264a7',
+  WEB:      '#3b82f6',
 };
 
 // cor do avatar derivada do account_id
@@ -73,6 +84,16 @@ function SessionItem({
           <span className={`pill ${STATUS_PILL[session.interaction_status]}`} style={{ fontSize: 9, padding: '1px 6px' }}>
             {STATUS_LABELS[session.interaction_status]}
           </span>
+          {session.channel && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+              background: `${CHANNEL_COLOR[session.channel]}22`,
+              color: CHANNEL_COLOR[session.channel],
+              border: `1px solid ${CHANNEL_COLOR[session.channel]}44`,
+            }}>
+              {CHANNEL_LABELS[session.channel]}
+            </span>
+          )}
           <span className="chat-session-tokens">
             <Zap size={10} />{session.total_tokens.toLocaleString()}
           </span>
@@ -142,9 +163,12 @@ export default function Chat() {
   const [selectedBotId, setSelectedBotId] = useState('');
 
   // sessions
-  const [sessions, setSessions]       = useState<Page<ChatSession> | null>(null);
-  const [sessionPage, setSessionPage] = useState(0);
+  const [sessions, setSessions]         = useState<Page<ChatSession> | null>(null);
+  const [sessionPage, setSessionPage]   = useState(0);
   const [statusFilter, setStatusFilter] = useState<SessionStatus | ''>('');
+  const [channelFilter, setChannelFilter] = useState<Channel | ''>('');
+  const [fromDate, setFromDate]         = useState('');
+  const [toDate, setToDate]             = useState('');
   const [loadingSessions, setLoadingSessions] = useState(false);
 
   // sessão e mensagens selecionadas
@@ -171,13 +195,15 @@ export default function Chat() {
     if (!selectedBotId) { setSessions(null); return; }
     setLoadingSessions(true);
     try {
-      const params: Parameters<typeof chatService.getSessions>[0] = {
+      const data = await chatService.getSessions({
         agentId: selectedBotId,
         page:    sessionPage,
         size:    20,
-      };
-      if (statusFilter) params.status = statusFilter;
-      const data = await chatService.getSessions(params);
+        status:  statusFilter  || undefined,
+        channel: channelFilter || undefined,
+        from:    fromDate ? new Date(`${fromDate}T00:00:00`).toISOString() : undefined,
+        to:      toDate   ? new Date(`${toDate}T23:59:59`).toISOString()   : undefined,
+      });
       setSessions(data);
       setSelectedSession(null);
       setMessages([]);
@@ -186,13 +212,16 @@ export default function Chat() {
     } finally {
       setLoadingSessions(false);
     }
-  }, [selectedBotId, sessionPage, statusFilter]);
+  }, [selectedBotId, sessionPage, statusFilter, channelFilter, fromDate, toDate]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
-  // ao resetar o bot ou filtro volta para page 0
-  const handleBotChange = (id: string) => { setSelectedBotId(id); setSessionPage(0); };
-  const handleStatusChange = (s: SessionStatus | '') => { setStatusFilter(s); setSessionPage(0); };
+  // qualquer mudança de filtro reseta para page 0
+  const handleBotChange     = (id: string)          => { setSelectedBotId(id);   setSessionPage(0); };
+  const handleStatusChange  = (s: SessionStatus | '') => { setStatusFilter(s);   setSessionPage(0); };
+  const handleChannelChange = (c: Channel | '')      => { setChannelFilter(c);   setSessionPage(0); };
+  const handleFromChange    = (v: string)            => { setFromDate(v);         setSessionPage(0); };
+  const handleToChange      = (v: string)            => { setToDate(v);           setSessionPage(0); };
 
   // carrega mensagens da sessão selecionada
   useEffect(() => {
@@ -217,7 +246,8 @@ export default function Chat() {
 
         {/* ── Filtros ─────────────────────────────── */}
         <div className="chat-filters">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+          {/* linha 1: bot + refresh */}
+          <div className="chat-filters-row">
             <Bot size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
             <select
               className="form-select"
@@ -230,24 +260,56 @@ export default function Chat() {
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
+
+            <select
+              className="form-select"
+              value={statusFilter}
+              onChange={e => handleStatusChange(e.target.value as SessionStatus | '')}
+              style={{ width: 148 }}
+            >
+              <option value="">Todos os status</option>
+              <option value="ACTIVE">Ativos</option>
+              <option value="CLOSED">Encerrados</option>
+              <option value="ABANDONED">Abandonados</option>
+              <option value="EXPIRED">Expirados</option>
+            </select>
+
+            <select
+              className="form-select"
+              value={channelFilter}
+              onChange={e => handleChannelChange(e.target.value as Channel | '')}
+              style={{ width: 130 }}
+            >
+              <option value="">Todos os canais</option>
+              <option value="WHATSAPP">WhatsApp</option>
+              <option value="TEAMS">Teams</option>
+              <option value="WEB">Web</option>
+            </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="date"
+                className="form-input"
+                value={fromDate}
+                onChange={e => handleFromChange(e.target.value)}
+                title="Data início"
+                style={{ width: 140, fontSize: 12 }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>até</span>
+              <input
+                type="date"
+                className="form-input"
+                value={toDate}
+                onChange={e => handleToChange(e.target.value)}
+                title="Data fim"
+                style={{ width: 140, fontSize: 12 }}
+              />
+            </div>
+
+            <button className="btn btn-secondary btn-icon" onClick={loadSessions} disabled={loadingSessions} title="Atualizar">
+              <RefreshCw size={14} className={loadingSessions ? 'spin' : ''} />
+            </button>
           </div>
-
-          <select
-            className="form-select"
-            value={statusFilter}
-            onChange={e => handleStatusChange(e.target.value as SessionStatus | '')}
-            style={{ width: 150 }}
-          >
-            <option value="">Todos os status</option>
-            <option value="ACTIVE">Ativos</option>
-            <option value="CLOSED">Encerrados</option>
-            <option value="ABANDONED">Abandonados</option>
-            <option value="EXPIRED">Expirados</option>
-          </select>
-
-          <button className="btn btn-secondary btn-icon" onClick={loadSessions} disabled={loadingSessions} title="Atualizar">
-            <RefreshCw size={14} className={loadingSessions ? 'spin' : ''} />
-          </button>
         </div>
 
         {/* ── Layout ──────────────────────────────── */}

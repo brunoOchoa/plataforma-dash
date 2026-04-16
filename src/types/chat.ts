@@ -1,12 +1,14 @@
 export type SessionStatus   = 'ACTIVE' | 'CLOSED' | 'ABANDONED' | 'EXPIRED';
 export type MessageType     = 'USER' | 'HUMAN_AGENT' | 'LLM_ASSISTANT';
 export type ResponderType   = 'LLM_ASSISTANT' | 'HUMAN_AGENT';
+export type Channel         = 'WHATSAPP' | 'TEAMS' | 'WEB';
 
 export interface ChatSession {
   id:                   string;
   agent_id:             string;
   agent_name:           string;
   account_id:           string;
+  channel?:             Channel;
   prompt_tokens:        number;
   completion_tokens:    number;
   total_tokens:         number;
