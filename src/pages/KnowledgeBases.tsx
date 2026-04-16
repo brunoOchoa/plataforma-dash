@@ -253,6 +253,12 @@ function DocumentsPanel({ kb, onClose }: { kb: KnowledgeBase; onClose: () => voi
                     <span className="doc-sep">·</span>
                     {new Date(doc.createdAt).toLocaleDateString('pt-BR')}
                   </p>
+                  {doc.status === 'ERROR' && doc.error_message && (
+                    <p style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#fca5a5', marginTop: 2 }}>
+                      <AlertTriangle size={10} style={{ flexShrink: 0 }} />
+                      {doc.error_message}
+                    </p>
+                  )}
                 </div>
                 <span className={`pill ${statusColor(doc.status)}`} style={{ flexShrink: 0, fontSize: 10 }}>
                   {statusLabel(doc.status)}
