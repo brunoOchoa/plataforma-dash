@@ -7,6 +7,7 @@ export interface DocumentUpload {
   filename: string;
   sizeBytes: number;
   status: DocumentStatus;
+  error_message: string | null;
   createdAt: string;
   knowledgeBaseId: string;
   knowledgeBaseName: string;
