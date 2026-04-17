@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { chatService } from '../services/chatService';
 import { botService }  from '../services/botService';
-import type { ChatSession, ChatMessage, SessionStatus, Channel } from '../types/chat';
+import type { ChatSession, ChatMessage, ChatAccount, SessionStatus, Channel } from '../types/chat';
 import type { Bot as BotType } from '../types/bot';
 import type { Page } from '../types/user';
 import AppShell from '../components/AppShell';
@@ -162,6 +162,10 @@ export default function Chat() {
   const [bots, setBots]               = useState<BotType[]>([]);
   const [selectedBotId, setSelectedBotId] = useState('');
 
+  // accounts do bot selecionado
+  const [accounts, setAccounts]         = useState<ChatAccount[]>([]);
+  const [accountFilter, setAccountFilter] = useState('');
+
   // sessions
   const [sessions, setSessions]         = useState<Page<ChatSession> | null>(null);
   const [sessionPage, setSessionPage]   = useState(0);
@@ -190,19 +194,29 @@ export default function Chat() {
       .catch(() => setBots([]));
   }, [selectedCompany]);
 
+  // carrega accounts quando o bot muda
+  useEffect(() => {
+    if (!selectedBotId) { setAccounts([]); setAccountFilter(''); return; }
+    chatService.getAccounts(selectedBotId)
+      .then(data => setAccounts(data.content))
+      .catch(() => setAccounts([]));
+    setAccountFilter('');
+  }, [selectedBotId]);
+
   // carrega sessões
   const loadSessions = useCallback(async () => {
     if (!selectedBotId) { setSessions(null); return; }
     setLoadingSessions(true);
     try {
       const data = await chatService.getSessions({
-        agentId: selectedBotId,
-        page:    sessionPage,
-        size:    20,
-        status:  statusFilter  || undefined,
-        channel: channelFilter || undefined,
-        from:    fromDate ? new Date(`${fromDate}T00:00:00`).toISOString() : undefined,
-        to:      toDate   ? new Date(`${toDate}T23:59:59`).toISOString()   : undefined,
+        agentId:   selectedBotId,
+        page:      sessionPage,
+        size:      20,
+        status:    statusFilter   || undefined,
+        channel:   channelFilter  || undefined,
+        accountId: accountFilter  || undefined,
+        from:      fromDate ? new Date(`${fromDate}T00:00:00`).toISOString() : undefined,
+        to:        toDate   ? new Date(`${toDate}T23:59:59`).toISOString()   : undefined,
       });
       setSessions(data);
       setSelectedSession(null);
@@ -212,7 +226,7 @@ export default function Chat() {
     } finally {
       setLoadingSessions(false);
     }
-  }, [selectedBotId, sessionPage, statusFilter, channelFilter, fromDate, toDate]);
+  }, [selectedBotId, sessionPage, statusFilter, channelFilter, accountFilter, fromDate, toDate]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
@@ -220,6 +234,7 @@ export default function Chat() {
   const handleBotChange     = (id: string)          => { setSelectedBotId(id);   setSessionPage(0); };
   const handleStatusChange  = (s: SessionStatus | '') => { setStatusFilter(s);   setSessionPage(0); };
   const handleChannelChange = (c: Channel | '')      => { setChannelFilter(c);   setSessionPage(0); };
+  const handleAccountChange = (v: string)            => { setAccountFilter(v);    setSessionPage(0); };
   const handleFromChange    = (v: string)            => { setFromDate(v);         setSessionPage(0); };
   const handleToChange      = (v: string)            => { setToDate(v);           setSessionPage(0); };
 
@@ -258,6 +273,23 @@ export default function Chat() {
               {bots.length === 0 && <option value="">Nenhum bot disponível</option>}
               {bots.map(b => (
                 <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+
+            <select
+              className="form-select"
+              value={accountFilter}
+              onChange={e => handleAccountChange(e.target.value)}
+              style={{ width: 180 }}
+              disabled={accounts.length === 0}
+            >
+              <option value="">
+                {accounts.length === 0 ? 'Sem accounts' : 'Todos os accounts'}
+              </option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.user_name ?? a.user_phone ?? a.user_email ?? `#${a.id.slice(-6).toUpperCase()}`}
+                </option>
               ))}
             </select>
 
