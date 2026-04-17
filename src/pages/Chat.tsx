@@ -288,7 +288,7 @@ export default function Chat() {
               </option>
               {accounts.map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.user_name ?? a.user_phone ?? a.user_email ?? `#${a.id.slice(-6).toUpperCase()}`}
+                  {a.name ?? a.user_id ?? `#${a.id.slice(-6).toUpperCase()}`}
                 </option>
               ))}
             </select>

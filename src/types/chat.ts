@@ -20,10 +20,9 @@ export interface ChatSession {
 
 export interface ChatAccount {
   id:                  string;
-  user_name:           string | null;
-  user_phone:          string | null;
-  user_email:          string | null;
-  user_cpf_cnpj:       string | null;
+  name:                string | null;
+  user_id:             string | null;
+  type:                string | null;
   last_interaction_at: string;
 }
 
