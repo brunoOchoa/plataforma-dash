@@ -9,6 +9,7 @@ export interface ChatSessionsParams {
   status?:    SessionStatus | '';
   channel?:   Channel | '';
   accountId?: string;
+  sort?:      string;   // ex: "createdAt,desc"
   page?:      number;
   size?:      number;
 }

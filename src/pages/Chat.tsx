@@ -171,6 +171,7 @@ export default function Chat() {
   const [sessionPage, setSessionPage]   = useState(0);
   const [statusFilter, setStatusFilter] = useState<SessionStatus | ''>('');
   const [channelFilter, setChannelFilter] = useState<Channel | ''>('');
+  const [sortField, setSortField]       = useState('createdAt,desc');
   const [fromDate, setFromDate]         = useState('');
   const [toDate, setToDate]             = useState('');
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -212,6 +213,7 @@ export default function Chat() {
         agentId:   selectedBotId,
         page:      sessionPage,
         size:      20,
+        sort:      sortField,
         status:    statusFilter   || undefined,
         channel:   channelFilter  || undefined,
         accountId: accountFilter  || undefined,
@@ -226,7 +228,7 @@ export default function Chat() {
     } finally {
       setLoadingSessions(false);
     }
-  }, [selectedBotId, sessionPage, statusFilter, channelFilter, accountFilter, fromDate, toDate]);
+  }, [selectedBotId, sessionPage, statusFilter, channelFilter, accountFilter, sortField, fromDate, toDate]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
@@ -235,6 +237,7 @@ export default function Chat() {
   const handleStatusChange  = (s: SessionStatus | '') => { setStatusFilter(s);   setSessionPage(0); };
   const handleChannelChange = (c: Channel | '')      => { setChannelFilter(c);   setSessionPage(0); };
   const handleAccountChange = (v: string)            => { setAccountFilter(v);    setSessionPage(0); };
+  const handleSortChange    = (v: string)            => { setSortField(v);         setSessionPage(0); };
   const handleFromChange    = (v: string)            => { setFromDate(v);         setSessionPage(0); };
   const handleToChange      = (v: string)            => { setToDate(v);           setSessionPage(0); };
 
@@ -337,6 +340,20 @@ export default function Chat() {
                 style={{ width: 140, fontSize: 12 }}
               />
             </div>
+
+            <select
+              className="form-select"
+              value={sortField}
+              onChange={e => handleSortChange(e.target.value)}
+              style={{ width: 180 }}
+            >
+              <option value="createdAt,desc">Data ↓ (mais recente)</option>
+              <option value="createdAt,asc">Data ↑ (mais antiga)</option>
+              <option value="updatedAt,desc">Última atividade ↓</option>
+              <option value="totalTokens,desc">Mais tokens</option>
+              <option value="interactionStatus,asc">Status A→Z</option>
+              <option value="channel,asc">Canal A→Z</option>
+            </select>
 
             <button className="btn btn-secondary btn-icon" onClick={loadSessions} disabled={loadingSessions} title="Atualizar">
               <RefreshCw size={14} className={loadingSessions ? 'spin' : ''} />
