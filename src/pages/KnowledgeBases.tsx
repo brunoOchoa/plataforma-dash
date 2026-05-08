@@ -149,7 +149,7 @@ function DocumentsPanel({ kb, onClose }: { kb: KnowledgeBase; onClose: () => voi
       setError('Apenas PDF, PNG e JPEG são permitidos');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > 6 * 1024 * 1024) {
       setError('Arquivo deve ter no máximo 5 MB');
       return;
     }

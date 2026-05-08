@@ -19,10 +19,15 @@ function fmtDate(iso: string) {
   const d = new Date(iso);
   const today = new Date();
   if (d.toDateString() === today.toDateString()) return fmtTime(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 function shortId(id: string) {
   return id.slice(-8).toUpperCase();
+}
+function fmtTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
 }
 
 const STATUS_LABELS: Record<SessionStatus, string> = {
@@ -58,8 +63,8 @@ function avatarColor(id: string) {
 
 /* ── SessionItem ────────────────────────────────────── */
 function SessionItem({
-  session, selected, onClick,
-}: { session: ChatSession; selected: boolean; onClick: () => void }) {
+  session, selected, onClick, accountName,
+}: { session: ChatSession; selected: boolean; onClick: () => void; accountName: string }) {
   return (
     <button
       className={`chat-session-item${selected ? ' selected' : ''}`}
@@ -73,8 +78,8 @@ function SessionItem({
       </div>
       <div className="chat-session-info">
         <div className="chat-session-row1">
-          <span className="chat-session-id">#{shortId(session.id)}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtDate(session.updated_at)}</span>
+          <span className="chat-session-id" title={`#${shortId(session.id)}`}>{accountName}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtDate(session.updated_at)}</span>
         </div>
         <div className="chat-session-row2">
           <Bot size={11} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
@@ -95,7 +100,7 @@ function SessionItem({
             </span>
           )}
           <span className="chat-session-tokens">
-            <Zap size={10} />{session.total_tokens.toLocaleString()}
+            <Zap size={10} />{fmtTokens(session.total_tokens)}
           </span>
         </div>
       </div>
@@ -104,7 +109,7 @@ function SessionItem({
 }
 
 /* ── MessageBubble ──────────────────────────────────── */
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, userName }: { msg: ChatMessage; userName: string }) {
   const isUser  = msg.type_message === 'USER';
   const isHuman = msg.type_message === 'HUMAN_AGENT';
 
@@ -120,7 +125,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       ? <UserCheck size={13} />
       : <Bot size={13} />;
 
-  const senderLabel = isUser ? 'Usuário' : isHuman ? 'Agente' : 'Bot';
+  const senderLabel = isUser ? userName : isHuman ? 'Agente' : 'Bot';
 
   return (
     <div className={`chat-bubble-wrap${isUser ? ' chat-bubble-wrap-user' : ''}`}>
@@ -257,6 +262,7 @@ export default function Chat() {
 
   const sessionList = sessions?.content ?? [];
   const totalPages  = sessions?.totalPages ?? 1;
+  const accountMap  = new Map(accounts.map(a => [a.id, a.name ?? a.user_id ?? `#${a.id.slice(-6).toUpperCase()}`]));
 
   return (
     <AppShell>
@@ -388,6 +394,7 @@ export default function Chat() {
                   session={s}
                   selected={selectedSession?.id === s.id}
                   onClick={() => setSelectedSession(s)}
+                  accountName={accountMap.get(s.account_id) ?? `#${shortId(s.id)}`}
                 />
               ))}
             </div>
@@ -433,6 +440,9 @@ export default function Chat() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                        {accountMap.get(selectedSession.account_id) ?? `#${shortId(selectedSession.id)}`}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                         #{shortId(selectedSession.id)}
                       </span>
                       <span className={`pill ${STATUS_PILL[selectedSession.interaction_status]}`} style={{ fontSize: 10 }}>
@@ -447,7 +457,7 @@ export default function Chat() {
                         {new Date(selectedSession.created_at).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <Zap size={10} /> {selectedSession.total_tokens.toLocaleString()} tokens
+                        <Zap size={10} /> {fmtTokens(selectedSession.total_tokens)} tokens
                       </span>
                     </div>
                   </div>
@@ -467,7 +477,7 @@ export default function Chat() {
                   ) : (
                     <>
                       {messages.map(m => (
-                        <MessageBubble key={m.id} msg={m} />
+                        <MessageBubble key={m.id} msg={m} userName={accountMap.get(selectedSession.account_id) ?? 'Usuário'} />
                       ))}
                       <div ref={messagesEndRef} />
                     </>
