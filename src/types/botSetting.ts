@@ -7,6 +7,8 @@ export interface BotSettingRequest {
   meta_settings?:         Record<string, unknown> | null;  // JSON livre — criptografado no banco
   orchestrator_settings?: Record<string, unknown> | null;  // JSON livre
   verify_token?:          string | null;
+  use_ia?:                boolean;
+  default_message?:       string | null;
 }
 
 /* BotSettingResponse — GET /api/v1/agent-settings/{agentId}
@@ -16,6 +18,8 @@ export interface BotSettingResponse {
   phoneNumberId:         string | null;
   orchestratorSettings:  Record<string, unknown> | null;
   verifyToken:           string | null;
+  use_ia:                boolean;
+  default_message:       string | null;
   agent: {
     id:         string;
     name:       string;

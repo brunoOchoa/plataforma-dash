@@ -5,11 +5,14 @@ import {
   ChevronLeft, ChevronRight, RefreshCw,
   X, Check, AlertTriangle, Database,
   FolderOpen, BookOpen, Building2, ChevronRight as Arrow,
+  Cloud, Lock, Eye, EyeOff, Bot as BotIcon,
 } from 'lucide-react';
 import { departmentService } from '../services/departmentService';
 import { companyService }    from '../services/companyService';
+import { sharepointConnectionService } from '../services/sharepointConnectionService';
 import type { Department, CreateDepartmentRequest, UpdateDepartmentRequest } from '../types/department';
 import type { Company } from '../types/company';
+import type { SharepointConnection, SharepointConnectionRequest } from '../types/sharepointConnection';
 import AppShell from '../components/AppShell';
 import { useCompany } from '../context/CompanyContext';
 import { useModalAnimation } from '../hooks/useModalAnimation';
@@ -211,6 +214,254 @@ function DepartmentModal({ dept, companies, defaultCompanyId, defaultCompanyName
 }
 
 /* ══════════════════════════════════════
+   SHAREPOINT CONNECTION MODAL
+   1 conexão por departamento — credenciais do Azure AD (app registration).
+══════════════════════════════════════ */
+function SharepointConnectionModal({ dept, onClose, push }: { dept: Department; onClose: () => void; push: (msg: string, type?: 'success' | 'error') => void }) {
+  const [loading,  setLoading]  = useState(true);
+  const [conn,     setConn]     = useState<SharepointConnection | null>(null);
+  const [editing,  setEditing]  = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+  const [errors,   setErrors]   = useState<Record<string, string>>({});
+
+  const [form, setForm] = useState({ tenantId: '', clientId: '', clientSecret: '', enabled: true });
+  const set = (k: keyof typeof form, v: string | boolean) => setForm(p => ({ ...p, [k]: v }));
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await sharepointConnectionService.getByDepartment(dept.id);
+      setConn(r);
+      setForm({ tenantId: r.tenantId, clientId: r.clientId, clientSecret: '', enabled: r.enabled });
+    } catch (err: any) {
+      if (err?.response?.status === 404) setConn(null);
+      else push('Erro ao carregar conexão SharePoint', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [dept.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { load(); }, [load]);
+
+  const isCreate = !conn;
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.tenantId.trim()) e.tenantId = 'Tenant ID é obrigatório';
+    if (!form.clientId.trim()) e.clientId = 'Client ID é obrigatório';
+    if (isCreate && !form.clientSecret.trim()) e.clientSecret = 'Client Secret é obrigatório';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const body: SharepointConnectionRequest = {
+        departmentId: dept.id,
+        tenantId: form.tenantId.trim(),
+        clientId: form.clientId.trim(),
+        clientSecret: form.clientSecret.trim() || undefined,
+        enabled: form.enabled,
+      };
+      if (conn) {
+        const r = await sharepointConnectionService.update(conn.id, body);
+        setConn(r); push('Conexão SharePoint atualizada!');
+      } else {
+        const r = await sharepointConnectionService.create(body);
+        setConn(r); push('Conexão SharePoint configurada!');
+      }
+      setEditing(false);
+      setForm(p => ({ ...p, clientSecret: '' }));
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao salvar conexão';
+      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setRemoving(true);
+    try {
+      await sharepointConnectionService.remove(conn!.id);
+      push('Conexão SharePoint removida');
+      setConn(null);
+      setForm({ tenantId: '', clientId: '', clientSecret: '', enabled: true });
+      setDeleting(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? 'Erro ao remover conexão (verifique se nenhuma fonte a está usando)';
+      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const { closing, close } = useModalAnimation(onClose);
+  const showForm = isCreate || editing;
+
+  return (
+    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
+      <div className={`modal${closing ? ' modal-closing' : ''}`} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Cloud size={16} color="#60a5fa" /> Conexão SharePoint
+            </h3>
+            <p>{dept.name}</p>
+          </div>
+          <button className="modal-close" onClick={close}><X size={16} /></button>
+        </div>
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#334155' }}>
+              <div className="spinner" style={{ margin: '0 auto 12px' }} />Carregando…
+            </div>
+          ) : (
+            <>
+              {errors._api && (
+                <div className="api-error-box">
+                  <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                  <span>{errors._api}</span>
+                </div>
+              )}
+
+              {!showForm && conn && (
+                <>
+                  <div className="model-locked-display" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tenant ID</span>
+                      <span className={`pill ${conn.enabled ? 'pill-green' : 'pill-gray'}`}>{conn.enabled ? 'Ativa' : 'Inativa'}</span>
+                    </div>
+                    <span style={{ fontSize: 13, color: '#e2e8f0', fontFamily: 'monospace' }}>{conn.tenantId}</span>
+                    <span style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>Client ID</span>
+                    <span style={{ fontSize: 13, color: '#e2e8f0', fontFamily: 'monospace' }}>{conn.clientId}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <Lock size={11} color="#475569" />
+                      <span style={{ fontSize: 11, color: '#475569' }}>Client Secret cifrado — nunca exibido</span>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 11, color: '#475569' }}>Atualizada em {new Date(conn.updatedAt).toLocaleString('pt-BR')}</p>
+                </>
+              )}
+
+              {!showForm && !conn && (
+                <div className="table-empty" style={{ padding: '20px 0' }}>
+                  <Cloud size={26} />
+                  <p>Nenhuma conexão SharePoint configurada para este departamento</p>
+                </div>
+              )}
+
+              {showForm && (
+                <div className="form-grid">
+                  <div className="form-field form-grid-full">
+                    <label className="form-label">Tenant ID *</label>
+                    <input
+                      className={`form-input ${errors.tenantId ? 'error' : ''}`}
+                      placeholder="GUID do tenant no Azure AD"
+                      value={form.tenantId}
+                      onChange={e => set('tenantId', e.target.value)}
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                    {errors.tenantId && <span className="form-error-msg">{errors.tenantId}</span>}
+                  </div>
+                  <div className="form-field form-grid-full">
+                    <label className="form-label">Client ID *</label>
+                    <input
+                      className={`form-input ${errors.clientId ? 'error' : ''}`}
+                      placeholder="Client ID do app registration"
+                      value={form.clientId}
+                      onChange={e => set('clientId', e.target.value)}
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                    {errors.clientId && <span className="form-error-msg">{errors.clientId}</span>}
+                  </div>
+                  <div className="form-field form-grid-full">
+                    <label className="form-label">Client Secret {isCreate ? '*' : <span className="form-hint" style={{ marginLeft: 4 }}>opcional — deixe vazio para manter o atual</span>}</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        className={`form-input ${errors.clientSecret ? 'error' : ''}`}
+                        type={showSecret ? 'text' : 'password'}
+                        placeholder={isCreate ? 'Client Secret do app registration' : '••••••••••••'}
+                        value={form.clientSecret}
+                        onChange={e => set('clientSecret', e.target.value)}
+                        style={{ fontFamily: 'monospace', paddingRight: 36 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecret(s => !s)}
+                        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 4 }}
+                      >
+                        {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    {errors.clientSecret && <span className="form-error-msg">{errors.clientSecret}</span>}
+                  </div>
+                  <div className="form-field" style={{ justifyContent: 'flex-end' }}>
+                    <label className="form-label">Status</label>
+                    <div className="toggle-wrap">
+                      <span>Conexão ativa</span>
+                      <label className="toggle">
+                        <input type="checkbox" checked={form.enabled} onChange={e => set('enabled', e.target.checked)} />
+                        <span className="toggle-track" /><span className="toggle-thumb" />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {deleting && (
+                <div className="warning-box">
+                  <AlertTriangle size={13} color="#fbbf24" style={{ flexShrink: 0 }} />
+                  <span>Remover a conexão? Só é possível se nenhuma fonte SharePoint do departamento estiver usando-a.</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+          <div>
+            {!loading && conn && !showForm && !deleting && (
+              <button className="btn btn-danger-ghost" onClick={() => setDeleting(true)}><Trash2 size={14} /> Remover</button>
+            )}
+            {deleting && (
+              <button className="btn btn-danger" onClick={handleDelete} disabled={removing}>
+                {removing ? <><span className="spinner-sm" /> Removendo…</> : <><Trash2 size={14} /> Confirmar remoção</>}
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {deleting ? (
+              <button className="btn btn-secondary" onClick={() => setDeleting(false)} disabled={removing}>Cancelar</button>
+            ) : showForm ? (
+              <>
+                <button className="btn btn-secondary" onClick={() => (conn ? setEditing(false) : close())} disabled={saving}>Cancelar</button>
+                <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || loading}>
+                  {saving ? <><span className="spinner-sm" /> Salvando…</> : <><Check size={14} />{isCreate ? 'Conectar' : 'Salvar'}</>}
+                </button>
+              </>
+            ) : conn ? (
+              <>
+                <button className="btn btn-secondary" onClick={close}>Fechar</button>
+                <button className="btn btn-primary" onClick={() => setEditing(true)}><Pencil size={14} /> Editar</button>
+              </>
+            ) : (
+              <button className="btn btn-primary" onClick={() => setEditing(true)} disabled={loading}><Plus size={14} /> Configurar Conexão</button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════
    DELETE MODAL
 ══════════════════════════════════════ */
 function DeleteModal({ dept, onClose, onConfirm }: { dept: Department; onClose: () => void; onConfirm: () => Promise<void> }) {
@@ -265,6 +516,7 @@ export default function Departments() {
   const [creating,   setCreating]   = useState(false);
   const [editing,    setEditing]    = useState<Department | null>(null);
   const [deleting,   setDeleting]   = useState<Department | null>(null);
+  const [spDept,     setSpDept]     = useState<Department | null>(null);
 
   const { toasts, push } = useToast();
 
@@ -385,14 +637,15 @@ export default function Departments() {
                     <th>Storage</th>
                     <th>Status</th>
                     <th>Base de Conhecimento</th>
+                    <th>Bots</th>
                     <th style={{ textAlign: 'right' }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr className="loading-row"><td colSpan={6}><div className="spinner" />Carregando...</td></tr>
+                    <tr className="loading-row"><td colSpan={7}><div className="spinner" />Carregando...</td></tr>
                   ) : depts.length === 0 ? (
-                    <tr><td colSpan={6}>
+                    <tr><td colSpan={7}>
                       <div className="table-empty">
                         <FolderOpen size={28} />
                         <p>Nenhum departamento encontrado</p>
@@ -432,8 +685,14 @@ export default function Departments() {
                           <BookOpen size={13} /> Ver bases <Arrow size={11} />
                         </button>
                       </td>
+                      <td data-label="Bots">
+                        <button className="btn-kb-link" onClick={() => navigate(`/bots?departmentId=${d.id}`)} title="Ver Bots">
+                          <BotIcon size={13} /> Ver bots <Arrow size={11} />
+                        </button>
+                      </td>
                       <td>
                         <div className="actions-cell">
+                          <button className="btn btn-ghost btn-icon" title="Conexão SharePoint" onClick={() => setSpDept(d)}><Cloud size={14} /></button>
                           <button className="btn btn-ghost btn-icon" title="Editar" onClick={() => setEditing(d)}><Pencil size={14} /></button>
                           <button className="btn btn-danger-ghost btn-icon" title="Desativar" onClick={() => setDeleting(d)}><Trash2 size={14} /></button>
                         </div>
@@ -500,6 +759,7 @@ export default function Departments() {
         />
       )}
       {deleting && <DeleteModal dept={deleting} onClose={() => setDeleting(null)} onConfirm={handleDelete} />}
+      {spDept   && <SharepointConnectionModal dept={spDept} onClose={() => setSpDept(null)} push={push} />}
 
       <div className="toast-container">
         {toasts.map(t => (

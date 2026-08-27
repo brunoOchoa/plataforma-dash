@@ -11,6 +11,7 @@ export interface DocumentUpload {
   createdAt: string;
   knowledgeBaseId: string;
   knowledgeBaseName: string;
+  from_sharepoint: boolean;
 }
 
 export interface DocumentPage {
@@ -36,4 +37,8 @@ export const uploadService = {
 
   remove: (id: string) =>
     api.delete(`/customer/upload/${id}`).then(r => r.data),
+
+  /** Reprocessa um upload de origem SharePoint (redownload + reenfileira pro RAG). */
+  retry: (id: string) =>
+    api.post(`/customer/upload/${id}/retry`).then(r => r.data),
 };

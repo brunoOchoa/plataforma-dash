@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bot, User, UserCheck, RefreshCw, ChevronLeft, ChevronRight,
-  MessageCircle, Zap, Search, MessagesSquare,
+  MessageCircle, Zap, Search, MessagesSquare, ChevronRight as Arrow,
 } from 'lucide-react';
 import { chatService } from '../services/chatService';
 import { botService }  from '../services/botService';
@@ -161,6 +162,7 @@ function EmptyMessages({ hasBot }: { hasBot: boolean }) {
 
 /* ── Chat Page ──────────────────────────────────────── */
 export default function Chat() {
+  const navigate = useNavigate();
   const { selectedCompany } = useCompany();
 
   // bots disponíveis
@@ -263,10 +265,17 @@ export default function Chat() {
   const sessionList = sessions?.content ?? [];
   const totalPages  = sessions?.totalPages ?? 1;
   const accountMap  = new Map(accounts.map(a => [a.id, a.name ?? a.user_id ?? `#${a.id.slice(-6).toUpperCase()}`]));
+  const selectedBot = bots.find(b => b.id === selectedBotId);
 
   return (
     <AppShell>
       <div className="chat-page">
+
+        <div className="hierarchy-breadcrumb" style={{ padding: '10px 16px 0' }}>
+          <button className="hierarchy-crumb-link" onClick={() => navigate('/bots')}><Bot size={13} /> Bots</button>
+          <Arrow size={13} style={{ color: '#334155' }} />
+          <span className="hierarchy-crumb-active"><MessageCircle size={13} /> {selectedBot ? `Chat · ${selectedBot.name}` : 'Chat'}</span>
+        </div>
 
         {/* ── Filtros ─────────────────────────────── */}
         <div className="chat-filters">

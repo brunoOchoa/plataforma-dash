@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -13,12 +13,11 @@ import { botService }           from '../services/botService';
 import { botSettingService }    from '../services/botSettingService';
 import { departmentService }    from '../services/departmentService';
 import { knowledgebaseService } from '../services/knowledgebaseService';
-import { promptService }        from '../services/promptService';
 import type { Bot, CreateBotRequest, UpdateBotRequest } from '../types/bot';
 import type { BotSettingResponse } from '../types/botSetting';
 import type { Department }     from '../types/department';
 import type { KnowledgeBase }  from '../types/knowledgebase';
-import type { Prompt, PromptType, CreatePromptRequest } from '../types/prompt';
+import type { Prompt, PromptType } from '../types/prompt';
 import AppShell from '../components/AppShell';
 import { useCompany } from '../context/CompanyContext';
 import { useModalAnimation } from '../hooks/useModalAnimation';
@@ -437,172 +436,6 @@ function ViewTextModal({ prompt, onClose }: { prompt: Prompt; onClose: () => voi
   );
 }
 
-/* ── Modal: criar prompt (bot fixo) ── */
-function BotPromptCreateModal({
-  bot, onClose, onSave,
-}: { bot: Bot; onClose: () => void; onSave: (b: CreatePromptRequest) => Promise<void> }) {
-  const [typePrompt,  setTypePrompt]  = useState<PromptType>('CHAT_GERAL');
-  const [description, setDescription] = useState('');
-  const [promptText,  setPromptText]  = useState('');
-  const [saving,      setSaving]      = useState(false);
-  const [errors,      setErrors]      = useState<Record<string, string>>({});
-
-  const handleSubmit = async () => {
-    const e: Record<string, string> = {};
-    if (!promptText.trim()) e.promptText = 'Texto do prompt é obrigatório';
-    setErrors(e);
-    if (Object.keys(e).length) return;
-    setSaving(true);
-    try {
-      await onSave({
-        agent_id:    bot.id,
-        type_prompt: typePrompt,
-        description: description.trim() || null,
-        prompt_text: promptText.trim(),
-      });
-      onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao salvar prompt';
-      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const { closing, close } = useModalAnimation(onClose);
-  return (
-    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
-      <div
-        className={`modal modal-lg${closing ? ' modal-closing' : ''}`}
-        style={{ maxWidth: 640 }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="modal-header">
-          <div>
-            <h3>Novo Prompt</h3>
-            <p>{bot.name} · nova versão de prompt</p>
-          </div>
-          <button className="modal-close" onClick={close}><X size={16} /></button>
-        </div>
-
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {errors._api && (
-            <div className="api-error-box">
-              <AlertTriangle size={14} style={{ flexShrink: 0 }} /><span>{errors._api}</span>
-            </div>
-          )}
-
-          <div className="form-field">
-            <label className="form-label">Tipo *</label>
-            <select className="form-select" value={typePrompt} onChange={e => setTypePrompt(e.target.value as PromptType)}>
-              <option value="CHAT_GERAL">Chat Geral</option>
-              <option value="RAG_GERAL">RAG Geral</option>
-            </select>
-          </div>
-
-          <div className="form-field">
-            <label className="form-label">
-              Descrição<span className="form-hint" style={{ marginLeft: 4 }}>opcional</span>
-            </label>
-            <input
-              className="form-input"
-              placeholder="Ex: Atendimento ao cliente v3"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              maxLength={512}
-            />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label">Texto do Prompt *</label>
-            <textarea
-              className={`form-input${errors.promptText ? ' error' : ''}`}
-              placeholder="Você é um assistente de atendimento..."
-              value={promptText}
-              onChange={e => setPromptText(e.target.value)}
-              rows={10}
-              style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.6 }}
-            />
-            {errors.promptText && <span className="form-error-msg">{errors.promptText}</span>}
-            <span className="form-hint">{promptText.length} caracteres</span>
-          </div>
-        </div>
-
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={close} disabled={saving}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? <><span className="spinner-sm" /> Salvando…</> : <><Check size={14} /> Criar Prompt</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Painel de prompts expandido ── */
-function BotPromptsPanel({ bot }: { bot: Bot }) {
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    promptService.list({ agentId: bot.id, size: 50 })
-      .then(r => setPrompts(r.content.filter(p => p.active)))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [bot.id]);
-
-  return (
-    <div style={{
-      padding: '16px 24px 18px',
-      background: 'var(--bg-card)',
-      borderTop: '2px solid #3b82f6',
-      borderBottom: '1px solid var(--border-subtle)',
-      boxShadow: 'inset 0 2px 8px rgba(59,130,246,0.06)',
-    }}>
-      <p style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-        Prompts Ativos
-      </p>
-      {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}>
-          <Loader2 size={13} className="spin" /> Carregando…
-        </div>
-      ) : prompts.length === 0 ? (
-        <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Nenhum prompt ativo para este bot.</span>
-      ) : (
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-          {prompts.map(p => (
-            <div key={p.id} style={{
-              flex: 1, minWidth: 260,
-              background: 'var(--bg-body)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 8,
-              padding: '10px 14px',
-            }}>
-              <span style={{
-                display: 'inline-block', marginBottom: 8, padding: '2px 8px', borderRadius: 4,
-                fontSize: 11, fontWeight: 600,
-                background: p.type_prompt === 'CHAT_GERAL' ? 'rgba(99,102,241,0.15)' : 'rgba(16,185,129,0.12)',
-                color:      p.type_prompt === 'CHAT_GERAL' ? '#818cf8'              : '#34d399',
-              }}>
-                {PROMPT_TYPE_LABELS[p.type_prompt]}
-              </span>
-              <pre style={{
-                margin: 0, padding: 0,
-                background: 'transparent',
-                fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
-                fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                maxHeight: 100, overflowY: 'auto',
-              }}>
-                {p.prompt_text}
-              </pre>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ══════════════════════════════════════
    BOT SETTING MODAL
 ══════════════════════════════════════ */
@@ -627,6 +460,10 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
   const [agentApiUrl, setAgentApiUrl] = useState('');
   const [agentApiKey, setAgentApiKey] = useState('');
 
+  // ── IA ────────────────────────────────────────────
+  const [useIa,          setUseIa]          = useState(true);
+  const [defaultMessage, setDefaultMessage] = useState('');
+
   // ── Orchestrator ──────────────────────────────────
   const [ragMaxResults,           setRagMaxResults]           = useState('9');
   const [ragMinSimilarity,        setRagMinSimilarity]        = useState('0.3');
@@ -648,6 +485,8 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
           setMetaMode('botapi');
         }
         setVerifyToken(s.verifyToken ?? '');
+        setUseIa(s.use_ia ?? true);
+        setDefaultMessage(s.default_message ?? '');
         // meta_settings é criptografado — não retorna na API
         const o = s.orchestratorSettings as Record<string, unknown> | null;
         if (o) {
@@ -696,6 +535,8 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
         phone_number_id: phone,
         verify_token:    token,
         meta_settings,
+        use_ia:          useIa,
+        default_message: useIa ? null : (defaultMessage.trim() || null),
         orchestrator_settings: {
           rag_max_results:                parseFloat(ragMaxResults)          || 9,
           rag_min_similarity:             parseFloat(ragMinSimilarity)       || 0.3,
@@ -728,10 +569,21 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
     </div>
   );
 
+  const [openSection, setOpenSection] = useState<'meta' | 'orchestrator' | null>(null);
+  const toggleSection = (s: 'meta' | 'orchestrator') =>
+    setOpenSection(prev => prev === s ? null : s);
+
+  // fix: drag iniciado dentro do modal não fecha ao soltar no backdrop
+  const backdropDown = useRef(false);
+
   const { closing, close } = useModalAnimation(onClose);
   return (
-    <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
-      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
+    <div
+      className={`modal-backdrop${closing ? ' modal-closing' : ''}`}
+      onMouseDown={e => { backdropDown.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (backdropDown.current && e.target === e.currentTarget) close(); backdropDown.current = false; }}
+    >
+      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 620 }} onMouseDown={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -756,118 +608,151 @@ function BotSettingModal({ bot, onClose }: { bot: Bot; onClose: () => void }) {
                 </div>
               )}
 
-              {/* ── Seção WhatsApp / Meta ── */}
+              {/* ── 1. Seção IA (sempre aberta) ── */}
               <div className="setting-section">
                 <div className="setting-section-title">
-                  <Phone size={13} /> WhatsApp · Meta API
+                  <BotIcon size={13} /> Inteligência Artificial
                 </div>
-
-                <div className="form-field">
-                  <label className="form-label">Phone Number ID</label>
-                  <input className="form-input" placeholder="Ex: 835412666332233"
-                    value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)} />
+                <div className="toggle-wrap" style={{ borderRadius: 8, justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>Usar IA neste agente</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {useIa ? 'Respostas geradas pelo modelo de linguagem' : 'Resposta fixa sem processamento de IA'}
+                    </span>
+                  </div>
+                  <label className="toggle">
+                    <input type="checkbox" checked={useIa} onChange={e => setUseIa(e.target.checked)} />
+                    <span className="toggle-track" />
+                    <span className="toggle-thumb" />
+                  </label>
                 </div>
-
-                <div className="form-field">
-                  <label className="form-label">Verify Token</label>
-                  <input className="form-input" placeholder="Token de verificação do webhook"
-                    value={verifyToken} onChange={e => setVerifyToken(e.target.value)} />
+                {/* Sanfona mensagem padrão — visível quando IA está ligada */}
+                <div style={{ overflow: 'hidden', maxHeight: !useIa ? 200 : 0, transition: 'max-height 0.3s ease' }}>
+                  <div className="form-field" style={{ paddingTop: 4 }}>
+                    <label className="form-label">
+                      Mensagem padrão
+                      <span className="form-hint" style={{ marginLeft: 4 }}>enviada quando IA está desativada</span>
+                    </label>
+                    <textarea className="form-input" rows={3}
+                      placeholder="Ex: Olá! No momento estou indisponível, em breve retornarei."
+                      value={defaultMessage} onChange={e => setDefaultMessage(e.target.value)}
+                      style={{ resize: 'vertical', minHeight: 72 }} />
+                  </div>
                 </div>
-
-                {/* Toggle acesso */}
-                <div style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.6)', marginBottom: 14, gap: 0 }}>
-                  {(['whatsapp', 'botapi'] as MetaMode[]).map((mode, i) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setMetaMode(mode)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 5,
-                        padding: '6px 14px', background: 'none', border: 'none', cursor: 'pointer',
-                        fontSize: 12, fontWeight: 500,
-                        color: metaMode === mode ? '#93c5fd' : '#475569',
-                        borderBottom: metaMode === mode ? '2px solid #3b82f6' : '2px solid transparent',
-                        marginBottom: -1,
-                        borderRadius: i === 0 ? '4px 0 0 0' : '0 4px 0 0',
-                        transition: 'color 0.15s',
-                      }}
-                    >
-                      {mode === 'whatsapp' ? <KeyRound size={12} /> : <Globe size={12} />}
-                      {mode === 'whatsapp' ? 'Access Token' : 'Agent API'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* ── Campos Access Token ── */}
-                {metaMode === 'whatsapp' && (
-                  <>
-                    <div className="form-field">
-                      <label className="form-label">
-                        Access Token
-                        <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
-                      </label>
-                      {setting && (
-                        <div className="warning-box" style={{ marginBottom: 8 }}>
-                          <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: 11 }}>Token criptografado — não retorna na API. Deixe vazio para manter o valor atual.</span>
-                        </div>
-                      )}
-                      <input className="form-input" placeholder="EAAMjQ..." type="password"
-                        value={accessToken} onChange={e => setAccessToken(e.target.value)} />
-                    </div>
-
-                    <div className="form-field">
-                      <label className="form-label">API Version</label>
-                      <input className="form-input" placeholder="v23.0"
-                        value={apiVersion} onChange={e => setApiVersion(e.target.value)} />
-                    </div>
-                  </>
-                )}
-
-                {/* ── Campos Agent API ── */}
-                {metaMode === 'botapi' && (
-                  <>
-                    <div className="form-field">
-                      <label className="form-label">Agent API URL</label>
-                      <input className="form-input" placeholder="https://api.exemplo.com/agent"
-                        value={agentApiUrl} onChange={e => setAgentApiUrl(e.target.value)} />
-                    </div>
-
-                    <div className="form-field">
-                      <label className="form-label">
-                        Agent API Key
-                        <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span>
-                      </label>
-                      {setting && (
-                        <div className="warning-box" style={{ marginBottom: 8 }}>
-                          <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: 11 }}>Key criptografada — não retorna na API. Deixe vazio para manter o valor atual.</span>
-                        </div>
-                      )}
-                      <input className="form-input" placeholder="sk-..." type="password"
-                        value={agentApiKey} onChange={e => setAgentApiKey(e.target.value)} />
-                    </div>
-                  </>
-                )}
               </div>
 
-              {/* ── Seção Orchestrator ── */}
-              <div className="setting-section">
-                <div className="setting-section-title">
-                  <Settings size={13} /> Orchestrator
+              {/* ── 2. Seção WhatsApp / Meta (colapsível) ── */}
+              <div className="setting-section" style={{ gap: 0 }}>
+                <button type="button" onClick={() => toggleSection('meta')} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '0', width: '100%',
+                }}>
+                  <span className="setting-section-title" style={{ margin: 0 }}>
+                    <Phone size={13} /> WhatsApp · Meta API
+                  </span>
+                  <ChevronDown size={15} style={{
+                    color: 'var(--text-muted)', flexShrink: 0,
+                    transform: openSection === 'meta' ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.25s ease',
+                  }} />
+                </button>
+                <div style={{ overflow: 'hidden', maxHeight: openSection === 'meta' ? 600 : 0, transition: 'max-height 0.3s ease' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 4 }}>
+                    <div className="form-field">
+                      <label className="form-label">Phone Number ID</label>
+                      <input className="form-input" placeholder="Ex: 835412666332233"
+                        value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)} />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">Verify Token</label>
+                      <input className="form-input" placeholder="Token de verificação do webhook"
+                        value={verifyToken} onChange={e => setVerifyToken(e.target.value)} />
+                    </div>
+                    <div style={{ display: 'flex', borderBottom: '1px solid rgba(51,65,85,0.6)', marginBottom: 2, gap: 0 }}>
+                      {(['whatsapp', 'botapi'] as MetaMode[]).map((mode, i) => (
+                        <button key={mode} type="button" onClick={() => setMetaMode(mode)} style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '6px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                          fontSize: 12, fontWeight: 500,
+                          color: metaMode === mode ? '#93c5fd' : '#475569',
+                          borderBottom: metaMode === mode ? '2px solid #3b82f6' : '2px solid transparent',
+                          marginBottom: -1,
+                          borderRadius: i === 0 ? '4px 0 0 0' : '0 4px 0 0',
+                          transition: 'color 0.15s',
+                        }}>
+                          {mode === 'whatsapp' ? <KeyRound size={12} /> : <Globe size={12} />}
+                          {mode === 'whatsapp' ? 'Access Token' : 'Agent API'}
+                        </button>
+                      ))}
+                    </div>
+                    {metaMode === 'whatsapp' && (<>
+                      <div className="form-field">
+                        <label className="form-label">Access Token <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span></label>
+                        {setting && (<div className="warning-box" style={{ marginBottom: 8 }}>
+                          <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: 11 }}>Token criptografado — não retorna na API. Deixe vazio para manter o valor atual.</span>
+                        </div>)}
+                        <input className="form-input" placeholder="EAAMjQ..." type="password"
+                          value={accessToken} onChange={e => setAccessToken(e.target.value)} />
+                      </div>
+                      <div className="form-field">
+                        <label className="form-label">API Version</label>
+                        <input className="form-input" placeholder="v23.0"
+                          value={apiVersion} onChange={e => setApiVersion(e.target.value)} />
+                      </div>
+                    </>)}
+                    {metaMode === 'botapi' && (<>
+                      <div className="form-field">
+                        <label className="form-label">Agent API URL</label>
+                        <input className="form-input" placeholder="https://api.exemplo.com/agent"
+                          value={agentApiUrl} onChange={e => setAgentApiUrl(e.target.value)} />
+                      </div>
+                      <div className="form-field">
+                        <label className="form-label">Agent API Key <span className="form-hint" style={{ marginLeft: 4 }}>criptografado</span></label>
+                        {setting && (<div className="warning-box" style={{ marginBottom: 8 }}>
+                          <AlertTriangle size={12} color="#fbbf24" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: 11 }}>Key criptografada — não retorna na API. Deixe vazio para manter o valor atual.</span>
+                        </div>)}
+                        <input className="form-input" placeholder="sk-..." type="password"
+                          value={agentApiKey} onChange={e => setAgentApiKey(e.target.value)} />
+                      </div>
+                    </>)}
+                  </div>
                 </div>
+              </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {numInput('RAG · Máx. resultados', ragMaxResults, setRagMaxResults)}
-                  {numInput('RAG · Similaridade mín.', ragMinSimilarity, setRagMinSimilarity, '0–1', '0.01')}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {numInput('Limite de tokens', chatTokensLimit, setChatTokensLimit)}
-                  {numInput('Limite de mensagens', chatMessagesLimit, setChatMessagesLimit)}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {numInput('Ratio de resumo', summaryTriggerRatio, setSummaryTriggerRatio, '0–1', '0.01')}
-                  {numInput('Timeout (min)', conversationTimeoutMin, setConversationTimeoutMin)}
+              {/* ── 3. Seção Orchestrator (colapsível) ── */}
+              <div className="setting-section" style={{ gap: 0 }}>
+                <button type="button" onClick={() => toggleSection('orchestrator')} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '0', width: '100%',
+                }}>
+                  <span className="setting-section-title" style={{ margin: 0 }}>
+                    <Settings size={13} /> Orchestrator
+                  </span>
+                  <ChevronDown size={15} style={{
+                    color: 'var(--text-muted)', flexShrink: 0,
+                    transform: openSection === 'orchestrator' ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.25s ease',
+                  }} />
+                </button>
+                <div style={{ overflow: 'hidden', maxHeight: openSection === 'orchestrator' ? 400 : 0, transition: 'max-height 0.3s ease' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 4 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                      {numInput('RAG · Máx. resultados', ragMaxResults, setRagMaxResults)}
+                      {numInput('RAG · Similaridade mín.', ragMinSimilarity, setRagMinSimilarity, '0–1', '0.01')}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                      {numInput('Limite de tokens', chatTokensLimit, setChatTokensLimit)}
+                      {numInput('Limite de mensagens', chatMessagesLimit, setChatMessagesLimit)}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                      {numInput('Ratio de resumo', summaryTriggerRatio, setSummaryTriggerRatio, '0–1', '0.01')}
+                      {numInput('Timeout (min)', conversationTimeoutMin, setConversationTimeoutMin)}
+                    </div>
+                  </div>
                 </div>
               </div>
             </>
@@ -943,7 +828,6 @@ export default function Bots() {
   const [editing,        setEditing]        = useState<Bot | null>(null);
   const [deleting,       setDeleting]       = useState<Bot | null>(null);
   const [settingBot,     setSettingBot]     = useState<Bot | null>(null);
-  const [expandedBotId,  setExpandedBotId]  = useState<string | null>(null);
 
   const { toasts, push } = useToast();
 
@@ -1105,8 +989,7 @@ export default function Bots() {
                       </div>
                     </td></tr>
                   ) : bots.map(b => (
-                    <Fragment key={b.id}>
-                      <tr style={{ borderBottom: expandedBotId === b.id ? 'none' : undefined }}>
+                      <tr key={b.id}>
                         <td>
                           <div className="user-name-cell">
                             <div className="bot-avatar-sm">{botInitials(b.name)}</div>
@@ -1142,16 +1025,10 @@ export default function Bots() {
                           <div className="actions-cell">
                             <button
                               className="btn btn-ghost btn-icon"
-                              title="Prompts"
-                              onClick={() => setExpandedBotId(id => id === b.id ? null : b.id)}
-                              style={{ color: expandedBotId === b.id ? '#93c5fd' : undefined }}
+                              title="Ver prompts deste bot"
+                              onClick={() => navigate(`/prompts?agentId=${b.id}`)}
                             >
                               <FileText size={14} />
-                              <ChevronDown size={10} style={{
-                                marginLeft: -2,
-                                transform: expandedBotId === b.id ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.2s',
-                              }} />
                             </button>
                             <button className="btn btn-ghost btn-icon" title="Configurações" onClick={() => setSettingBot(b)}>
                               <Settings size={14} />
@@ -1165,14 +1042,6 @@ export default function Bots() {
                           </div>
                         </td>
                       </tr>
-                      {expandedBotId === b.id && (
-                        <tr>
-                          <td colSpan={6} style={{ padding: 0 }}>
-                            <BotPromptsPanel bot={b} />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
                   ))}
                 </tbody>
               </table>

@@ -7,15 +7,17 @@ export const knowledgebaseService = {
     companyId?: string;
     departmentId?: string;
     modelType?: string;
+    active?: boolean;
     page?: number;
     size?: number;
   }) => {
     // API espera todos os params em camelCase
-    const { departmentId, companyId, modelType, ...rest } = params ?? {};
+    const { departmentId, companyId, modelType, active, ...rest } = params ?? {};
     const p: Record<string, any> = { size: 20, ...rest };
-    if (companyId)    p['companyId']    = companyId;
-    if (departmentId) p['departmentId'] = departmentId;
-    if (modelType)    p['modelType']    = modelType;
+    if (companyId)        p['companyId']    = companyId;
+    if (departmentId)     p['departmentId'] = departmentId;
+    if (modelType)        p['modelType']    = modelType;
+    if (active !== undefined) p['active']   = active;
     return api.get<KnowledgeBasePage>('/knowledge-base', { params: p }).then(r => r.data);
   },
 

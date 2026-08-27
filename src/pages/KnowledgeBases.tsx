@@ -1,19 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Plus, Pencil, Trash2,
   ChevronLeft, ChevronRight, RefreshCw,
   X, Check, AlertTriangle,
   BookOpen, FolderOpen, Building2, ChevronRight as Arrow,
-  Cpu, Lock, FileText, Upload, File, Loader2,
+  Cpu, Lock, FileText, Upload,
+  Cloud, FolderTree, RotateCw, PlugZap, Folder,
 } from 'lucide-react';
 import { knowledgebaseService } from '../services/knowledgebaseService';
 import { departmentService }    from '../services/departmentService';
-import { uploadService }        from '../services/uploadService';
+import { sharepointSourceService } from '../services/sharepointSourceService';
 import type { KnowledgeBase, CreateKnowledgeBaseRequest, UpdateKnowledgeBaseRequest, EmbedModelType } from '../types/knowledgebase';
 import { EMBED_MODEL_OPTIONS }  from '../types/knowledgebase';
 import type { Department }      from '../types/department';
-import type { DocumentUpload }  from '../services/uploadService';
+import type { SharepointSource, SharepointSourceRequest, SharepointTestConnectionResponse, SharepointSyncStatus } from '../types/sharepointSource';
 import AppShell from '../components/AppShell';
 import { useCompany } from '../context/CompanyContext';
 import { useModalAnimation } from '../hooks/useModalAnimation';
@@ -42,14 +43,6 @@ function formatKb(kb: number) {
   return `${kb} KB`;
 }
 
-function formatBytes(bytes: number) {
-  if (!bytes) return '0 B';
-  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
-  if (bytes >= 1_048_576)     return `${(bytes / 1_048_576).toFixed(1)} MB`;
-  if (bytes >= 1_024)         return `${(bytes / 1_024).toFixed(1)} KB`;
-  return `${bytes} B`;
-}
-
 function kbInitials(name: string) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
@@ -68,23 +61,22 @@ function modelColor(type: EmbedModelType): string {
   return map[type] ?? 'model-chip-gray';
 }
 
-function statusColor(s: string) {
+function syncStatusColor(s: SharepointSyncStatus) {
   switch (s) {
-    case 'AVAILABLE':  return 'pill-green';
-    case 'PROCESSED':  return 'pill-blue';
-    case 'PENDING':    return 'pill-amber';
-    case 'ERROR':      return 'pill-red';
-    default:           return 'pill-gray';
+    case 'SYNCED':       return 'pill-green';
+    case 'SYNCING':      return 'pill-blue';
+    case 'ERROR':        return 'pill-red';
+    case 'NEVER_SYNCED':
+    default:              return 'pill-gray';
   }
 }
-function statusLabel(s: string) {
+function syncStatusLabel(s: SharepointSyncStatus) {
   switch (s) {
-    case 'AVAILABLE':  return 'Disponível';
-    case 'PROCESSED':  return 'Processado';
-    case 'PENDING':    return 'Pendente';
-    case 'ERROR':      return 'Erro';
-    case 'TRASH':      return 'Lixo';
-    default:           return s;
+    case 'SYNCED':       return 'Sincronizado';
+    case 'SYNCING':      return 'Sincronizando';
+    case 'ERROR':        return 'Erro na sync';
+    case 'NEVER_SYNCED':
+    default:              return 'Nunca sincronizado';
   }
 }
 
@@ -116,169 +108,533 @@ function ModelSelector({ value, onChange }: { value: EmbedModelType; onChange: (
 }
 
 /* ══════════════════════════════════════
-   DOCUMENTS PANEL — upload + lista
+   SHAREPOINT SOURCE MODAL
+   1 fonte por base de conhecimento — aponta pra um site/biblioteca/pasta do
+   SharePoint, usando as credenciais da Connection do departamento da KB.
 ══════════════════════════════════════ */
-function DocumentsPanel({ kb, onClose }: { kb: KnowledgeBase; onClose: () => void }) {
-  const [docs,      setDocs]      = useState<DocumentUpload[]>([]);
-  const [loading,   setLoading]   = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [dragOver,  setDragOver]  = useState(false);
-  const [error,     setError]     = useState('');
-  const [deleting,  setDeleting]  = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+function SharepointSourceModal({ kb, onClose, push, onChanged }: {
+  kb: KnowledgeBase; onClose: () => void;
+  push: (msg: string, type?: 'success' | 'error') => void;
+  onChanged: () => void;
+}) {
+  const [loading,  setLoading]  = useState(true);
+  const [source,   setSource]   = useState<SharepointSource | null>(null);
+  const [editing,  setEditing]  = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [testing,  setTesting]  = useState(false);
+  const [syncing,  setSyncing]  = useState(false);
+  const [testResult, setTestResult] = useState<SharepointTestConnectionResponse | null>(null);
+  const [syncMsg,  setSyncMsg]  = useState('');
+  const [errors,   setErrors]   = useState<Record<string, string>>({});
 
-  const loadDocs = useCallback(async () => {
-    setLoading(true);
+  const [form, setForm] = useState({ siteHostname: '', sitePath: '', libraryName: '', folderPaths: [] as string[], enabled: true });
+  const set = (k: 'siteHostname' | 'sitePath' | 'libraryName', v: string) => setForm(p => ({ ...p, [k]: v }));
+  const setEnabled = (v: boolean) => setForm(p => ({ ...p, enabled: v }));
+
+  const [folderInput, setFolderInput] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerError, setPickerError] = useState('');
+  const [pickerItems, setPickerItems] = useState<SharepointTestConnectionResponse['items']>([]);
+  const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
+
+  const buildRequestBody = (folderPaths: string[] = form.folderPaths): SharepointSourceRequest => ({
+    knowledgeBaseId: kb.id,
+    siteHostname: form.siteHostname.trim(),
+    sitePath: form.sitePath.trim(),
+    libraryName: form.libraryName.trim() || null,
+    folderPaths,
+    enabled: form.enabled,
+  });
+
+  /**
+   * Atualiza a lista de pastas local E, se a Source já existe, salva na hora --
+   * sem isso, escolher pastas (ou digitar/remover uma) ficava só no formulário até um
+   * clique manual em "Salvar", e um "Sincronizar Agora" nesse meio-tempo usava o que
+   * já estava salvo no banco (a raiz inteira, se a Source acabou de ser criada pelo
+   * seletor com folderPaths ainda vazio) em vez das pastas recém-escolhidas.
+   */
+  const persistFolderPaths = async (folderPaths: string[]) => {
+    setForm(p => ({ ...p, folderPaths }));
+    if (!source) return;
     try {
-      const r = await uploadService.list({ knowledgeBaseId: kb.id, size: 50 });
-      setDocs(r.content);
-    } catch {
-      setError('Erro ao carregar documentos');
-    } finally {
-      setLoading(false);
-    }
-  }, [kb.id]);
-
-  useEffect(() => { loadDocs(); }, [loadDocs]);
-
-  const handleFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    const allowed = ['application/pdf', 'image/png', 'image/jpeg'];
-    if (!allowed.includes(file.type)) {
-      setError('Apenas PDF, PNG e JPEG são permitidos');
-      return;
-    }
-    if (file.size > 6 * 1024 * 1024) {
-      setError('Arquivo deve ter no máximo 5 MB');
-      return;
-    }
-    setError('');
-    setUploading(true);
-    try {
-      await uploadService.upload(file, kb.id);
-      await loadDocs();
+      const r = await sharepointSourceService.update(source.id, buildRequestBody(folderPaths));
+      setSource(r);
+      onChanged();
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao enviar arquivo';
-      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
+      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao salvar pastas selecionadas';
+      push(typeof msg === 'string' ? msg : 'Erro ao salvar pastas selecionadas', 'error');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setDeleting(id);
+  const addFolder = (path: string) => {
+    const trimmed = path.trim();
+    if (!trimmed || form.folderPaths.includes(trimmed)) return;
+    persistFolderPaths([...form.folderPaths, trimmed]);
+  };
+  const removeFolder = (path: string) => persistFolderPaths(form.folderPaths.filter(f => f !== path));
+
+  /**
+   * root-items precisa de uma Source já salva (lê site/biblioteca/conexão do banco).
+   * Se o usuário ainda está criando, salva automaticamente com os dados já
+   * preenchidos (silencioso, sem fechar o formulário) pra poder abrir o seletor sem
+   * exigir um clique extra em "Salvar" antes.
+   */
+  const ensureSourceForPicker = async (): Promise<SharepointSource | null> => {
+    if (source) return source;
+    if (!validate()) return null;
+    setSaving(true);
     try {
-      await uploadService.remove(id);
-      setDocs(p => p.filter(d => d.id !== id));
+      const r = await sharepointSourceService.create(buildRequestBody());
+      setSource(r);
+      push('Fonte SharePoint conectada!');
+      onChanged();
+      return r;
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Erro ao remover documento';
-      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao salvar fonte';
+      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+      return null;
     } finally {
-      setDeleting(null);
+      setSaving(false);
+    }
+  };
+
+  const openPicker = async () => {
+    const src = await ensureSourceForPicker();
+    if (!src) return;
+    setPickerOpen(true);
+    setPickerLoading(true);
+    setPickerError('');
+    setPickerSelected(new Set(form.folderPaths));
+    try {
+      const r = await sharepointSourceService.listRootItems(src.id);
+      if (r.success) setPickerItems(r.items.filter(it => it.folder));
+      else setPickerError(r.error ?? 'Falha ao listar pastas');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? 'Erro ao listar pastas da raiz';
+      setPickerError(typeof msg === 'string' ? msg : 'Erro ao listar pastas da raiz');
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+  const togglePickerItem = (name: string) => setPickerSelected(p => {
+    const next = new Set(p);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
+  const confirmPicker = () => {
+    persistFolderPaths(Array.from(new Set([...form.folderPaths, ...pickerSelected])));
+    setPickerOpen(false);
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await sharepointSourceService.getByKnowledgeBase(kb.id);
+      setSource(r);
+      setForm({ siteHostname: r.siteHostname, sitePath: r.sitePath, libraryName: r.libraryName ?? '', folderPaths: r.folderPaths ?? [], enabled: r.enabled });
+    } catch (err: any) {
+      if (err?.response?.status === 404) setSource(null);
+      else push('Erro ao carregar fonte SharePoint', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [kb.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { load(); }, [load]);
+
+  const isCreate = !source;
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.siteHostname.trim()) e.siteHostname = 'Hostname do site é obrigatório';
+    if (!form.sitePath.trim()) e.sitePath = 'Caminho do site é obrigatório';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const body = buildRequestBody();
+      const r = source
+        ? await sharepointSourceService.update(source.id, body)
+        : await sharepointSourceService.create(body);
+      setSource(r);
+      push(source ? 'Fonte SharePoint atualizada!' : 'Fonte SharePoint conectada!');
+      // Ao criar, mantém o formulário aberto -- só agora (com a Source salva) o botão
+      // "Escolher pastas" fica disponível, e fechar aqui forçaria reabrir em modo Editar
+      // pra usá-lo. Num update normal, fecha e volta pra visualização.
+      if (!isCreate) setEditing(false);
+      onChanged();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.response?.data ?? 'Erro ao salvar fonte';
+      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setRemoving(true);
+    try {
+      await sharepointSourceService.remove(source!.id);
+      push('Fonte SharePoint removida — base voltou a ser MANUAL');
+      setSource(null);
+      setTestResult(null);
+      setForm({ siteHostname: '', sitePath: '', libraryName: '', folderPaths: [], enabled: true });
+      setDeleting(false);
+      onChanged();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? 'Erro ao remover fonte';
+      setErrors({ _api: typeof msg === 'string' ? msg : JSON.stringify(msg) });
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!source) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await sharepointSourceService.testConnection(source.id);
+      setTestResult(r);
+      if (!r.success) push(r.error ?? 'Falha ao testar conexão', 'error');
+      // driveId pode ter sido resolvido/cacheado — recarrega a fonte
+      load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? 'Erro ao testar conexão';
+      push(typeof msg === 'string' ? msg : 'Erro ao testar conexão', 'error');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleSync = async () => {
+    if (!source) return;
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const r = await sharepointSourceService.sync(source.id);
+      setSource(r);
+      push('Sincronização disparada!');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message ?? 'Erro ao disparar sincronização';
+      if (status === 429) setSyncMsg(msg);
+      else if (status === 503) setSyncMsg('Serviço de sincronização indisponível no momento. Tente novamente em instantes.');
+      else push(typeof msg === 'string' ? msg : 'Erro ao disparar sincronização', 'error');
+    } finally {
+      setSyncing(false);
     }
   };
 
   const { closing, close } = useModalAnimation(onClose);
+  const showForm = isCreate || editing;
+
   return (
+    <>
     <div className={`modal-backdrop${closing ? ' modal-closing' : ''}`} onClick={close}>
-      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 640, maxHeight: '88vh' }} onClick={e => e.stopPropagation()}>
+      <div className={`modal modal-lg${closing ? ' modal-closing' : ''}`} style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BookOpen size={16} color="#6ee7b7" /> {kb.name}
+              <Cloud size={16} color="#60a5fa" /> Fonte SharePoint
             </h3>
-            <p>Documentos da base · {kb.department_name ?? '—'}</p>
+            <p>{kb.name}</p>
           </div>
           <button className="modal-close" onClick={close}><X size={16} /></button>
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {error && (
-            <div className="api-error-box" style={{ marginBottom: 0 }}>
-              <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-              <span>{error}</span>
-              <button onClick={() => setError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', padding: 0 }}>
-                <X size={13} />
-              </button>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#334155' }}>
+              <div className="spinner" style={{ margin: '0 auto 12px' }} />Carregando…
             </div>
-          )}
-
-          <div
-            className={`upload-dropzone ${dragOver ? 'dragover' : ''} ${uploading ? 'uploading' : ''}`}
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
-            onClick={() => !uploading && fileRef.current?.click()}
-          >
-            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
-            {uploading ? (
-              <><Loader2 size={28} color="#60a5fa" className="spin" /><p className="upload-zone-text">Enviando arquivo…</p></>
-            ) : (
-              <>
-                <Upload size={28} color={dragOver ? '#60a5fa' : '#334155'} />
-                <p className="upload-zone-text">{dragOver ? 'Solte o arquivo aqui' : 'Clique ou arraste um arquivo'}</p>
-                <p className="upload-zone-hint">PDF, PNG, JPEG · máx 5 MB por arquivo</p>
-              </>
-            )}
-          </div>
-
-          <div className="docs-list-header">
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Documentos ({docs.length})
-            </span>
-            <button className="btn btn-ghost" style={{ height: 28, padding: '0 10px', fontSize: 12 }} onClick={loadDocs} disabled={loading}>
-              <RefreshCw size={12} className={loading ? 'spin' : ''} /> Atualizar
-            </button>
-          </div>
-
-          <div className="docs-list">
-            {loading && docs.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 0', color: '#334155' }}>
-                <div className="spinner" style={{ margin: '0 auto 12px' }} />Carregando documentos…
-              </div>
-            ) : docs.length === 0 ? (
-              <div className="docs-empty">
-                <File size={24} style={{ opacity: 0.3 }} />
-                <p>Nenhum documento enviado ainda</p>
-              </div>
-            ) : docs.map(doc => (
-              <div key={doc.id} className="doc-item">
-                <div className="doc-item-icon"><FileText size={15} color="#60a5fa" /></div>
-                <div className="doc-item-info">
-                  <p className="doc-item-name">{doc.filename}</p>
-                  <p className="doc-item-meta">
-                    {formatBytes(doc.sizeBytes)}
-                    <span className="doc-sep">·</span>
-                    {new Date(doc.createdAt).toLocaleDateString('pt-BR')}
-                  </p>
-                  {doc.status === 'ERROR' && doc.error_message && (
-                    <p style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#fca5a5', marginTop: 2 }}>
-                      <AlertTriangle size={10} style={{ flexShrink: 0 }} />
-                      {doc.error_message}
-                    </p>
-                  )}
+          ) : (
+            <>
+              {errors._api && (
+                <div className="api-error-box">
+                  <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                  <span>{errors._api}</span>
                 </div>
-                <span className={`pill ${statusColor(doc.status)}`} style={{ flexShrink: 0, fontSize: 10 }}>
-                  {statusLabel(doc.status)}
-                </span>
-                <button className="btn btn-danger-ghost btn-icon" title="Remover" onClick={() => handleDelete(doc.id)} disabled={deleting === doc.id} style={{ flexShrink: 0 }}>
-                  {deleting === doc.id ? <span className="spinner-sm" style={{ borderTopColor: '#f87171' }} /> : <Trash2 size={14} />}
-                </button>
-              </div>
-            ))}
-          </div>
+              )}
+
+              {!showForm && source && (
+                <>
+                  <div className="model-locked-display" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className={`pill ${syncStatusColor(source.syncStatus)}`}>{syncStatusLabel(source.syncStatus)}</span>
+                      <span className={`pill ${source.enabled ? 'pill-green' : 'pill-gray'}`}>{source.enabled ? 'Ativa' : 'Inativa'}</span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Site</span>
+                      <p style={{ fontSize: 13, color: '#e2e8f0', fontFamily: 'monospace', marginTop: 2 }}>{source.siteHostname}{source.sitePath}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 24 }}>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Biblioteca</span>
+                        <p style={{ fontSize: 13, color: '#e2e8f0', marginTop: 2 }}>{source.libraryName || 'Documents'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pastas sincronizadas</span>
+                        {source.folderPaths.length > 0 ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                            {source.folderPaths.map(fp => (
+                              <span key={fp} className="pill pill-gray" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Folder size={11} />{fp}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: 13, color: '#e2e8f0', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Folder size={11} color="#475569" />Sincronizando a biblioteca inteira
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {source.lastSyncedAt && (
+                      <p style={{ fontSize: 11, color: '#475569' }}>Última sync: {new Date(source.lastSyncedAt).toLocaleString('pt-BR')}</p>
+                    )}
+                    {source.lastSyncError && (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11, color: '#fca5a5' }}>
+                        <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 1 }} />
+                        <span>{source.lastSyncError}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {syncMsg && (
+                    <div className="warning-box">
+                      <AlertTriangle size={13} color="#fbbf24" style={{ flexShrink: 0 }} />
+                      <span>{syncMsg}</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="btn btn-secondary" onClick={handleTestConnection} disabled={testing}>
+                      <PlugZap size={14} className={testing ? 'spin' : ''} /> {testing ? 'Testando…' : 'Testar Conexão'}
+                    </button>
+                    <button className="btn btn-secondary" onClick={handleSync} disabled={syncing}>
+                      <RotateCw size={14} className={syncing ? 'spin' : ''} /> {syncing ? 'Sincronizando…' : 'Sincronizar Agora'}
+                    </button>
+                  </div>
+
+                  {testResult && (
+                    <div className={testResult.success ? 'model-locked-display' : 'api-error-box'} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                      {testResult.success ? (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Check size={13} color="#6ee7b7" />
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{testResult.siteDisplayName}</span>
+                          </div>
+                          <p style={{ fontSize: 11, color: '#475569' }}>Biblioteca: {testResult.driveName}</p>
+                          {testResult.items.length > 0 && (
+                            <div className="docs-list" style={{ maxHeight: 160, overflowY: 'auto' }}>
+                              {testResult.items.map((it, i) => (
+                                <div key={i} className="doc-item" style={{ padding: '6px 10px' }}>
+                                  <div className="doc-item-icon">
+                                    {it.folder ? <FolderTree size={13} color="#fbbf24" /> : <FileText size={13} color="#60a5fa" />}
+                                  </div>
+                                  <div className="doc-item-info">
+                                    <p className="doc-item-name" style={{ fontSize: 12 }}>{it.name}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                          <span>{testResult.error ?? 'Falha ao testar a conexão'}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!showForm && !source && (
+                <div className="table-empty" style={{ padding: '20px 0' }}>
+                  <Cloud size={26} />
+                  <p>Esta base ainda não está conectada ao SharePoint</p>
+                </div>
+              )}
+
+              {showForm && (
+                <div className="form-grid">
+                  <div className="form-field form-grid-full">
+                    <label className="form-label">Hostname do Site *</label>
+                    <input
+                      className={`form-input ${errors.siteHostname ? 'error' : ''}`}
+                      placeholder="ex: empresa.sharepoint.com"
+                      value={form.siteHostname}
+                      onChange={e => set('siteHostname', e.target.value)}
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                    {errors.siteHostname && <span className="form-error-msg">{errors.siteHostname}</span>}
+                    <span className="form-hint">Aceita colar com https:// na frente — é limpo automaticamente</span>
+                  </div>
+                  <div className="form-field form-grid-full">
+                    <label className="form-label">Caminho do Site *</label>
+                    <input
+                      className={`form-input ${errors.sitePath ? 'error' : ''}`}
+                      placeholder="ex: /sites/NomeDoSite"
+                      value={form.sitePath}
+                      onChange={e => set('sitePath', e.target.value)}
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                    {errors.sitePath && <span className="form-error-msg">{errors.sitePath}</span>}
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Biblioteca <span className="form-hint" style={{ marginLeft: 4 }}>opcional</span></label>
+                    <input className="form-input" placeholder="Documents" value={form.libraryName} onChange={e => set('libraryName', e.target.value)} />
+                    <span className="form-hint">Default "Documents" se omitido</span>
+                  </div>
+                  <div className="form-field form-grid-full">
+                    <label className="form-label">Pastas sincronizadas <span className="form-hint" style={{ marginLeft: 4 }}>opcional</span></label>
+                    {form.folderPaths.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        {form.folderPaths.map(fp => (
+                          <span key={fp} className="pill pill-gray" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Folder size={11} />{fp}
+                            <button type="button" onClick={() => removeFolder(fp)} style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit' }}>
+                              <X size={11} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="form-hint" style={{ marginBottom: 8 }}>Vazio = sincroniza a biblioteca inteira</p>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="btn btn-secondary" onClick={openPicker} disabled={!form.siteHostname.trim() || !form.sitePath.trim() || saving}>
+                        <FolderTree size={14} /> {saving && !source ? 'Salvando…' : 'Escolher pastas'}
+                      </button>
+                      <input
+                        className="form-input"
+                        placeholder="ou digite o nome da pasta"
+                        value={folderInput}
+                        onChange={e => setFolderInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFolder(folderInput); setFolderInput(''); } }}
+                      />
+                      <button type="button" className="btn btn-secondary" onClick={() => { addFolder(folderInput); setFolderInput(''); }}>
+                        <Plus size={14} /> Adicionar
+                      </button>
+                    </div>
+                    {!source && <span className="form-hint">Preencha hostname e caminho do site para escolher pastas — a fonte é salva automaticamente ao clicar</span>}
+                  </div>
+                  <div className="form-field" style={{ justifyContent: 'flex-end' }}>
+                    <label className="form-label">Status</label>
+                    <div className="toggle-wrap">
+                      <span>Fonte ativa</span>
+                      <label className="toggle">
+                        <input type="checkbox" checked={form.enabled} onChange={e => setEnabled(e.target.checked)} />
+                        <span className="toggle-track" /><span className="toggle-thumb" />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {deleting && (
+                <div className="warning-box">
+                  <AlertTriangle size={13} color="#fbbf24" style={{ flexShrink: 0 }} />
+                  <span>Remover a fonte? A base volta sozinha para MANUAL e libera upload de novo.</span>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 11, color: '#475569' }}>
-            Tamanho total da base: <strong style={{ color: '#94a3b8' }}>{formatKb(kb.size_kb)}</strong>
-          </span>
-          <button className="btn btn-secondary" onClick={close}>Fechar</button>
+          <div>
+            {!loading && source && !showForm && !deleting && (
+              <button className="btn btn-danger-ghost" onClick={() => setDeleting(true)}><Trash2 size={14} /> Remover</button>
+            )}
+            {deleting && (
+              <button className="btn btn-danger" onClick={handleDelete} disabled={removing}>
+                {removing ? <><span className="spinner-sm" /> Removendo…</> : <><Trash2 size={14} /> Confirmar remoção</>}
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {deleting ? (
+              <button className="btn btn-secondary" onClick={() => setDeleting(false)} disabled={removing}>Cancelar</button>
+            ) : showForm ? (
+              <>
+                <button className="btn btn-secondary" onClick={() => (source ? setEditing(false) : close())} disabled={saving}>Cancelar</button>
+                <button className="btn btn-primary" onClick={handleSubmit} disabled={saving || loading}>
+                  {saving ? <><span className="spinner-sm" /> Salvando…</> : <><Check size={14} />{isCreate ? 'Conectar' : 'Salvar'}</>}
+                </button>
+              </>
+            ) : source ? (
+              <>
+                <button className="btn btn-secondary" onClick={close}>Fechar</button>
+                <button className="btn btn-primary" onClick={() => setEditing(true)}><Pencil size={14} /> Editar</button>
+              </>
+            ) : (
+              <button className="btn btn-primary" onClick={() => setEditing(true)} disabled={loading}><Plus size={14} /> Conectar SharePoint</button>
+            )}
+          </div>
         </div>
       </div>
     </div>
+
+    {pickerOpen && (
+      <div className="modal-backdrop" onClick={() => setPickerOpen(false)} style={{ zIndex: 210 }}>
+        <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <div><h3>Escolher pastas</h3><p>Marque as pastas da raiz da biblioteca que devem sincronizar</p></div>
+            <button className="modal-close" onClick={() => setPickerOpen(false)}><X size={16} /></button>
+          </div>
+          <div className="modal-body">
+            {pickerLoading ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: '#334155' }}>
+                <div className="spinner" style={{ margin: '0 auto 12px' }} />Carregando pastas…
+              </div>
+            ) : pickerError ? (
+              <div className="api-error-box">
+                <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                <span>{pickerError}</span>
+              </div>
+            ) : pickerItems.length === 0 ? (
+              <div className="table-empty" style={{ padding: '16px 0' }}>
+                <FolderTree size={22} />
+                <p>Nenhuma pasta encontrada na raiz da biblioteca</p>
+              </div>
+            ) : (
+              <div className="docs-list" style={{ maxHeight: 320, overflowY: 'auto' }}>
+                {pickerItems.map(it => (
+                  <label key={it.name} className="doc-item" style={{ padding: '8px 10px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={pickerSelected.has(it.name)}
+                      onChange={() => togglePickerItem(it.name)}
+                      style={{ marginRight: 8 }}
+                    />
+                    <div className="doc-item-icon"><FolderTree size={13} color="#fbbf24" /></div>
+                    <div className="doc-item-info"><p className="doc-item-name" style={{ fontSize: 13 }}>{it.name}</p></div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setPickerOpen(false)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={confirmPicker} disabled={pickerLoading}>
+              <Check size={14} /> Adicionar selecionadas
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -325,9 +681,12 @@ function KbModal({ kb, departments, defaultDeptId, onClose, onSave }: KbModalPro
     try {
       if (isEdit) {
         const body: UpdateKnowledgeBaseRequest = {
-          name:        form.name.trim(),
-          description: form.description.trim() || null,
-          active:      form.active,
+          name:          form.name.trim(),
+          description:   form.description.trim() || null,
+          active:        form.active,
+          // API exige esses dois no PUT mesmo sendo imutáveis — reenvia os valores atuais
+          model_type:    kb!.model_type,
+          department_id: kb!.department_id,
         };
         await onSave(body, kb!.id);
       } else {
@@ -491,6 +850,7 @@ export default function KnowledgeBases() {
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [search,         setSearch]         = useState('');
   const [selDept,        setSelDept]        = useState(filterDeptId);
+  const [selActive,      setSelActive]      = useState<'active' | 'inactive' | 'all'>('active');
   const [page,           setPage]           = useState(0);
   const [total,          setTotal]          = useState(0);
   const [totalPg,        setTotalPg]        = useState(1);
@@ -498,7 +858,7 @@ export default function KnowledgeBases() {
   const [creating,       setCreating]       = useState(false);
   const [editing,        setEditing]        = useState<KnowledgeBase | null>(null);
   const [deleting,       setDeleting]       = useState<KnowledgeBase | null>(null);
-  const [docsKb,         setDocsKb]         = useState<KnowledgeBase | null>(null);
+  const [spKb,           setSpKb]           = useState<KnowledgeBase | null>(null);
 
   const { toasts, push } = useToast();
 
@@ -526,6 +886,7 @@ export default function KnowledgeBases() {
       if (search)                params.name         = search;
       if (selDept)               params.departmentId = selDept;
       if (selectedCompany?.id)   params.companyId    = selectedCompany.id;
+      if (selActive !== 'all')   params.active       = selActive === 'active';
       const r = await knowledgebaseService.list(params);
       setBases(r.content);
       setTotal(r.totalElements);
@@ -535,9 +896,9 @@ export default function KnowledgeBases() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, selDept, selectedCompany, push]);
+  }, [page, search, selDept, selActive, selectedCompany, push]);
 
-  useEffect(() => { setPage(0); }, [search, selDept, selectedCompany]);
+  useEffect(() => { setPage(0); }, [search, selDept, selActive, selectedCompany]);
   useEffect(() => { load(); }, [load]);
 
   const handleSave = async (body: CreateKnowledgeBaseRequest | UpdateKnowledgeBaseRequest, id?: string) => {
@@ -608,6 +969,11 @@ export default function KnowledgeBases() {
                 </option>
               ))}
             </select>
+            <select className="form-select" style={{ height: 38, width: 'auto', minWidth: 160 }} value={selActive} onChange={e => setSelActive(e.target.value as 'active' | 'inactive' | 'all')}>
+              <option value="active">Somente ativas</option>
+              <option value="inactive">Somente inativas</option>
+              <option value="all">Todas</option>
+            </select>
           </div>
 
           <div className="table-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -621,18 +987,21 @@ export default function KnowledgeBases() {
                     <th>Tamanho</th>
                     <th>Status</th>
                     <th>Documentos</th>
+                    <th>SharePoint</th>
                     <th style={{ textAlign: 'right' }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr className="loading-row"><td colSpan={7}><div className="spinner" />Carregando...</td></tr>
+                    <tr className="loading-row"><td colSpan={8}><div className="spinner" />Carregando...</td></tr>
                   ) : bases.length === 0 ? (
-                    <tr><td colSpan={7}>
+                    <tr><td colSpan={8}>
                       <div className="table-empty">
                         <BookOpen size={28} />
                         <p>Nenhuma base de conhecimento encontrada</p>
-                        {selDept && <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => setSelDept('')}>Ver todas</button>}
+                        {(selDept || selActive !== 'all') && (
+                          <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => { setSelDept(''); setSelActive('all'); }}>Ver todas</button>
+                        )}
                       </div>
                     </td></tr>
                   ) : bases.map(b => (
@@ -669,8 +1038,19 @@ export default function KnowledgeBases() {
                         <span className={`pill ${b.active ? 'pill-green' : 'pill-gray'}`}>{b.active ? 'Ativa' : 'Inativa'}</span>
                       </td>
                       <td>
-                        <button className="btn-kb-link" onClick={() => setDocsKb(b)} title="Ver e enviar documentos">
-                          <Upload size={13} /> Documentos <Arrow size={11} />
+                        {b.source_type === 'SHAREPOINT' ? (
+                          <span style={{ fontSize: 12, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Lock size={11} /> via SharePoint
+                          </span>
+                        ) : (
+                          <button className="btn-kb-link" onClick={() => navigate(`/uploads?knowledgeBaseId=${b.id}`)} title="Ver e enviar documentos">
+                            <Upload size={13} /> Documentos <Arrow size={11} />
+                          </button>
+                        )}
+                      </td>
+                      <td>
+                        <button className="btn-kb-link" onClick={() => setSpKb(b)} title="Gerenciar fonte SharePoint">
+                          <Cloud size={13} /> {b.source_type === 'SHAREPOINT' ? 'Gerenciar' : 'Conectar'} <Arrow size={11} />
                         </button>
                       </td>
                       <td>
@@ -719,7 +1099,7 @@ export default function KnowledgeBases() {
           onClose={() => { setCreating(false); setEditing(null); }} onSave={handleSave} />
       )}
       {deleting && <DeleteModal kb={deleting} onClose={() => setDeleting(null)} onConfirm={handleDelete} />}
-      {docsKb   && <DocumentsPanel kb={docsKb} onClose={() => setDocsKb(null)} />}
+      {spKb     && <SharepointSourceModal kb={spKb} onClose={() => setSpKb(null)} push={push} onChanged={load} />}
 
       <div className="toast-container">
         {toasts.map(t => (

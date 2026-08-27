@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, Bot, Shield, Settings,
   LogOut, Bell, X, Zap, ChevronRight, ChevronDown, Menu, FolderOpen, BookOpen, FileText,
-  Sun, Moon, Check, MessageCircle,
+  Sun, Moon, Check, MessageCircle, Upload,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCompany } from '../context/CompanyContext';
@@ -153,6 +153,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     path.startsWith('/companies')        ? 'Empresas' :
     path.startsWith('/departments')      ? 'Departamentos' :
     path.startsWith('/knowledge-bases')  ? 'Base de Conhecimento' :
+    path.startsWith('/uploads')          ? 'Uploads' :
     path.startsWith('/permissions')      ? 'Permissões' :
     path.startsWith('/bots')             ? 'Bots'     :
     path.startsWith('/prompts')          ? 'Prompts'  :
@@ -232,19 +233,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => navTo('/knowledge-bases')}
           />
           <NavItem
-            icon={Users}
-            label="Usuários"
-            active={path.startsWith('/users')}
-            onClick={() => navTo('/users')}
+            icon={Upload}
+            label="Uploads"
+            active={path.startsWith('/uploads')}
+            onClick={() => navTo('/uploads')}
           />
-          {!isCustomer && (
-            <NavItem
-              icon={Shield}
-              label="Permissões"
-              active={path.startsWith('/permissions')}
-              onClick={() => navTo('/permissions')}
-            />
-          )}
           <NavItem
             icon={Bot}
             label="Bots"
@@ -263,6 +256,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             active={path.startsWith('/chat')}
             onClick={() => navTo('/chat')}
           />
+
+          <p className="nav-section-label">Acessos</p>
+          <NavItem
+            icon={Users}
+            label="Usuários"
+            active={path.startsWith('/users')}
+            onClick={() => navTo('/users')}
+          />
+          {!isCustomer && (
+            <NavItem
+              icon={Shield}
+              label="Permissões"
+              active={path.startsWith('/permissions')}
+              onClick={() => navTo('/permissions')}
+            />
+          )}
 
           <p className="nav-section-label">Sistema</p>
           <NavItem

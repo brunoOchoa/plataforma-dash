@@ -43,6 +43,8 @@ export interface KnowledgeBase {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /* MANUAL | SHAREPOINT — trava sozinho quando uma SharepointSource é criada pra essa base */
+  source_type?: 'MANUAL' | 'SHAREPOINT';
 }
 
 /* Requisição de criação — API espera snake_case */
@@ -54,11 +56,16 @@ export interface CreateKnowledgeBaseRequest {
   active?: boolean;
 }
 
-/* Requisição de edição — model_type é IMUTÁVEL, não enviar */
+/* Requisição de edição — a API usa o mesmo DTO do create e EXIGE department_id e
+   model_type no body mesmo no PUT (ela só revalida que continuam os mesmos —
+   model_type é imutável e departmentId não pode ser alterado pela UI, mas
+   precisam ser reenviados ou a API rejeita com 400 "obrigatório"). */
 export interface UpdateKnowledgeBaseRequest {
   name: string;
   description: string | null;
   active: boolean;
+  model_type: EmbedModelType;
+  department_id: string;
 }
 
 export interface KnowledgeBasePage {

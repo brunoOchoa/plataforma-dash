@@ -11,8 +11,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://plataforma-dash-api.hmg.ghitss.net/',
-        // target: 'http://localhost:8080',
+        // target: 'https://plataforma-dash-api.dev.ghitss.net/',
+        target: 'http://localhost:8080/',
         changeOrigin: true,
       },
     },

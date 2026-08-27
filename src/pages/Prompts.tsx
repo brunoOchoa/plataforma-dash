@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Plus, RefreshCw,
   ChevronLeft, ChevronRight,
@@ -227,11 +227,13 @@ function ViewPromptModal({ prompt, onClose }: { prompt: Prompt; onClose: () => v
 ══════════════════════════════════════ */
 export default function Prompts() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const filterBotId = searchParams.get('agentId') ?? '';
   const { selectedCompany } = useCompany();
 
   const [prompts,   setPrompts]   = useState<Prompt[]>([]);
   const [bots,      setBots]      = useState<Bot[]>([]);
-  const [selBot,    setSelBot]    = useState('');
+  const [selBot,    setSelBot]    = useState(filterBotId);
   const [selType,   setSelType]   = useState<PromptType | ''>('');
   const [page,      setPage]      = useState(0);
   const [total,     setTotal]     = useState(0);
@@ -413,12 +415,15 @@ export default function Prompts() {
                         </div>
                       </td>
                       <td data-label="Bot">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <BotIcon size={12} color="#475569" />
-                          <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                            {bots.find(b => b.id === p.agent_id)?.name ?? p.agent_id.slice(0, 8) + '…'}
-                          </span>
-                        </div>
+                        <button
+                          className="btn-kb-link"
+                          style={{ fontSize: 13 }}
+                          title="Filtrar prompts deste bot"
+                          onClick={() => setSelBot(p.agent_id)}
+                        >
+                          <BotIcon size={12} />
+                          {bots.find(b => b.id === p.agent_id)?.name ?? p.agent_id.slice(0, 8) + '…'}
+                        </button>
                       </td>
                       <td data-label="Tipo">
                         <span className="pill pill-blue" style={{ fontSize: 11 }}>

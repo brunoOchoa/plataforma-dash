@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Pencil, Trash2, Building2,
   ChevronLeft, ChevronRight, RefreshCw,
   X, Check, AlertTriangle, Eye, EyeOff,
   Copy, CheckCheck, Database, Mail, Hash,
+  FolderOpen, ChevronRight as Arrow,
 } from 'lucide-react';
 import { companyService } from '../services/companyService';
 import type { Company, CreateCompanyRequest, UpdateCompanyRequest, Page } from '../types/company';
@@ -359,6 +361,7 @@ function DeleteModal({ company, onClose, onConfirm }: {
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
 export default function Companies() {
+  const navigate = useNavigate();
   const [data,    setData]    = useState<Page<Company> | null>(null);
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState<ActiveFilter>('all');
@@ -476,16 +479,17 @@ export default function Companies() {
                     <th>E-mail</th>
                     <th>Storage</th>
                     <th>Status</th>
+                    <th>Departamentos</th>
                     <th style={{ textAlign: 'right' }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr className="loading-row">
-                      <td colSpan={6}><div className="spinner" />Carregando...</td>
+                      <td colSpan={7}><div className="spinner" />Carregando...</td>
                     </tr>
                   ) : companies.length === 0 ? (
-                    <tr><td colSpan={6}>
+                    <tr><td colSpan={7}>
                       <div className="table-empty">
                         <Building2 size={28} />
                         <p>Nenhuma empresa encontrada</p>
@@ -528,6 +532,11 @@ export default function Companies() {
                         <span className={`pill ${c.active ? 'pill-green' : 'pill-gray'}`}>
                           {c.active ? 'Ativa' : 'Inativa'}
                         </span>
+                      </td>
+                      <td data-label="Departamentos">
+                        <button className="btn-kb-link" onClick={() => navigate(`/departments?companyId=${c.id}`)} title="Ver departamentos">
+                          <FolderOpen size={13} /> Ver departamentos <Arrow size={11} />
+                        </button>
                       </td>
                       <td>
                         <div className="actions-cell">

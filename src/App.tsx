@@ -11,6 +11,7 @@ import Permissions from './pages/Permissions';
 import Companies from './pages/Companies';
 import Departments from './pages/Departments';
 import KnowledgeBases from './pages/KnowledgeBases';
+import Uploads from './pages/Uploads';
 import Bots from './pages/Bots';
 import Prompts from './pages/Prompts';
 import Chat from './pages/Chat';
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="/permissions" element={<SystemOnly><ErrorBoundary><Permissions /></ErrorBoundary></SystemOnly>} />
               <Route path="/departments"     element={<Protected><ErrorBoundary><Departments /></ErrorBoundary></Protected>} />
               <Route path="/knowledge-bases" element={<Protected><ErrorBoundary><KnowledgeBases /></ErrorBoundary></Protected>} />
+              <Route path="/uploads"         element={<Protected><ErrorBoundary><Uploads /></ErrorBoundary></Protected>} />
               <Route path="/bots"        element={<Protected><ErrorBoundary><Bots /></ErrorBoundary></Protected>} />
               <Route path="/prompts"     element={<Protected><ErrorBoundary><Prompts /></ErrorBoundary></Protected>} />
               <Route path="/chat"        element={<Protected><ErrorBoundary><Chat /></ErrorBoundary></Protected>} />
